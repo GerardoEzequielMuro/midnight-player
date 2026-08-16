@@ -375,7 +375,9 @@ const messageOf = (err) => String(err?.message || err || 'Algo salió mal.');
 function renderDriveAccount(state) {
   const on = !!state?.connected;
   el.driveAccount.hidden = !on;
-  el.driveUser.textContent = on ? `Conectado como ${drive.accountLabel() || 'tu cuenta de Google'}` : '';
+  const who = drive.accountLabel() || 'tu cuenta de Google';
+  el.driveUser.textContent = on ? `Conectado como ${who}` : '';
+  el.driveUser.title = on ? who : '';
   el.driveConnect.textContent = on ? 'Volver a revisar Drive' : 'Conectar Google Drive';
 }
 
