@@ -151,17 +151,17 @@ function setupError(message) {
 el.setupAction.addEventListener('click', () => setupAction());
 
 const PRIVACY =
-  'This page has no server behind it. Your video and subtitle files are read directly off this device, ' +
-  'played in this tab, and never sent anywhere — there is nowhere for them to be sent to.';
+  'Esta página no tiene un servidor detrás. Tus videos y subtítulos se leen directamente de este dispositivo, ' +
+  'se reproducen en esta pestaña y no se envían a ninguna parte: no hay adónde enviarlos.';
 
 function setupPick() {
   showSetup({
-    title: 'Choose the folder your episodes are in',
+    title: 'Elige la carpeta donde están tus episodios',
     body: PRIVACY,
-    action: 'Choose folder',
+    action: 'Elegir carpeta',
     note: hasDirectoryPicker
-      ? 'The folder is remembered, so you will not have to find it again next time.'
-      : 'This browser cannot keep a folder open between visits, so it will ask again next time. What you watched is still remembered.',
+      ? 'La carpeta queda recordada, así que no vas a tener que buscarla la próxima vez.'
+      : 'Este navegador no puede mantener una carpeta abierta entre visitas, así que te la va a pedir de nuevo. Lo que viste se sigue recordando.',
     onAction: pickFolder,
   });
 }
@@ -174,15 +174,15 @@ function setupPick() {
  */
 function setupContinue(handle) {
   showSetup({
-    title: 'Welcome back',
-    body: `Your library is here. This browser needs one click before it will read “${handle.name}” again.`,
+    title: 'Hola de nuevo',
+    body: `Tu biblioteca está acá. Este navegador necesita un clic antes de volver a leer “${handle.name}”.`,
     action: 'Continue',
     note: PRIVACY,
     onAction: async () => {
       try {
         const state = await ensurePermission(handle, { prompt: true });
         if (state !== 'granted') {
-          return setupError('Permission was not granted, so the folder cannot be read. Use Folder in the library header to choose it again.');
+          return setupError('No se dio el permiso, así que no se puede leer la carpeta. Usa Carpeta, arriba en la biblioteca, para elegirla otra vez.');
         }
         await useHandle(handle);
       } catch (err) {
@@ -194,11 +194,11 @@ function setupContinue(handle) {
 
 function setupRemembered() {
   showSetup({
-    title: 'Your library is remembered',
+    title: 'Tu biblioteca quedó guardada',
     body:
-      'Episodes, what you watched and where you stopped are all still here. This browser cannot hold on to a folder ' +
-      'between visits, so pick an episode and it will ask for the folder once.',
-    action: 'Choose folder',
+      'Los episodios, lo que viste y dónde lo dejaste siguen acá. Este navegador no puede retener una carpeta ' +
+      'entre visitas, así que elige un episodio y te pedirá la carpeta una vez.',
+    action: 'Elegir carpeta',
     note: PRIVACY,
     onAction: pickFolder,
   });
@@ -206,19 +206,19 @@ function setupRemembered() {
 
 function setupUnsupported() {
   showSetup({
-    title: 'This browser cannot open a folder',
+    title: 'Este navegador no puede abrir una carpeta',
     body:
-      'Reading a folder needs either the File System Access API or a directory file input, and this browser has ' +
-      'neither, so nothing here will work. A recent Chrome, Edge, Firefox or Safari will.',
+      'Leer una carpeta necesita la API de acceso al sistema de archivos o un campo de carpeta, y este navegador no ' +
+      'tiene ninguno de los dos, así que nada de esto va a funcionar. Un Chrome, Edge, Firefox o Safari reciente sí.',
     action: null,
   });
 }
 
 function askForFolder(reason) {
   showSetup({
-    title: 'Open the folder to play this',
+    title: 'Abre la carpeta para reproducirlo',
     body: reason,
-    action: 'Choose folder',
+    action: 'Elegir carpeta',
     note: PRIVACY,
     onAction: pickFolder,
   });
@@ -257,7 +257,7 @@ async function useHandle(handle) {
     await useEntries(entries, handle.name || '');
   } catch (err) {
     showScreen('setup');
-    setupError(`Could not read that folder: ${err.message || err}`);
+    setupError(`No se pudo leer esa carpeta: ${err.message || err}`);
   }
 }
 
@@ -272,7 +272,7 @@ async function useEntries(entries, folderName) {
     pendingId = null;
     if (order.find((e) => e.id === id)?.entry) return open(id);
     showScreen('setup');
-    return setupError('That episode is not in this folder.');
+    return setupError('Ese episodio no está en esta carpeta.');
   }
   // The folder is open and nothing is playing, so on a phone the list is now
   // the only thing worth looking at.
@@ -283,12 +283,12 @@ async function useEntries(entries, folderName) {
 el.btnFolder.addEventListener('click', pickFolder);
 
 el.rescan.addEventListener('click', async () => {
-  el.rescan.textContent = 'Scanning…';
+  el.rescan.textContent = 'Leyendo…';
   try {
     if (rootHandle) await useHandle(rootHandle);
     else await pickFolder();
   } finally {
-    el.rescan.textContent = 'Rescan';
+    el.rescan.textContent = 'Releer';
   }
 });
 
@@ -311,7 +311,7 @@ function epRow(ep) {
     `<span class="num">${esc(ep.tag || '')}</span>` +
     `<span class="name">${esc(ep.title)}</span>` +
     `<span class="marks">${subMarks(ep)}</span>` +
-    `<span class="watch${saved.watched ? ' on' : ''}" data-watch="${esc(ep.id)}" title="Mark watched (W)">✓</span>` +
+    `<span class="watch${saved.watched ? ' on' : ''}" data-watch="${esc(ep.id)}" title="Marcar como visto (W)">✓</span>` +
     '</div>' +
     (pct > 1 && pct < 97 ? `<div class="resume" style="width:calc(${pct}% - 28px)"></div>` : '')
   );
@@ -321,7 +321,7 @@ function renderLibrary(next, folderName) {
   lib = next;
   order = orderOf(lib);
 
-  const bits = [`${lib.counts.episodes} episodes`, `${lib.counts.attached}/${lib.counts.subtitles} subtitle files attached`];
+  const bits = [`${lib.counts.episodes} episodes`, `${lib.counts.attached}/${lib.counts.subtitles} archivos de subtítulos vinculados`];
   if (!live) bits.push('folder not open');
   el.counts.textContent = bits.join(' · ');
   el.counts.title = folderName || '';
@@ -329,7 +329,7 @@ function renderLibrary(next, folderName) {
 
   const html = [];
   for (const season of lib.seasons) {
-    html.push(`<div class="season-title">Season ${season.number}</div>`);
+    html.push(`<div class="season-title">Temporada ${season.number}</div>`);
     for (const ep of season.episodes) html.push(epRow(ep));
   }
   if (lib.loose.length) {
@@ -375,7 +375,7 @@ async function open(id) {
     // A remembered library with no folder behind it. This is the one moment the
     // fallback browsers are asked for the folder — not on arrival.
     pendingId = id;
-    return askForFolder(`“${ep.label}” is in your library, but the folder it lives in is not open yet. Choose it and playback will start.`);
+    return askForFolder(`“${ep.label}” está en tu biblioteca, pero la carpeta donde está todavía no se abrió. Elígela y empezará solo.`);
   }
 
   current = ep;
@@ -386,7 +386,7 @@ async function open(id) {
   try {
     file = await ep.entry.getFile();
   } catch (err) {
-    return showFailure(ep, `The file could not be opened: ${err.message || err}. It may have been moved or renamed — try Rescan.`);
+    return showFailure(ep, `No se pudo abrir el archivo: ${err.message || err}. Puede que lo hayan movido o renombrado; prueba con Releer.`);
   }
 
   showScreen('player');
@@ -427,7 +427,7 @@ function offerResume(seconds) {
   clearTimeout(resumeTimer);
   el.resume.hidden = !seconds;
   if (!seconds) return;
-  el.resumeText.textContent = `Resumed at ${fmt(seconds)}`;
+  el.resumeText.textContent = `Retomado en ${fmt(seconds)}`;
   resumeTimer = setTimeout(() => { el.resume.hidden = true; }, 9000);
 }
 
@@ -471,18 +471,18 @@ async function selectTrack(path) {
 
   if (!track || !track.entry) {
     subs.set(null);
-    el.searchCount.textContent = track ? 'That subtitle file is not open — press Rescan.' : '';
+    el.searchCount.textContent = track ? 'Ese archivo de subtítulos no está abierto: presiona Releer.' : '';
   } else {
     try {
       const text = await readTextFile(await track.entry.getFile());
       const cues = parseSubtitle(track.name, text);
       if (token !== loadToken) return; // a faster hand already chose something else
       subs.set(cues);
-      el.searchCount.textContent = cues.length ? '' : 'That file parsed to no cues.';
+      el.searchCount.textContent = cues.length ? '' : 'Ese archivo no contiene ningún subtítulo.';
     } catch (err) {
       if (token !== loadToken) return;
       subs.set(null);
-      el.searchCount.textContent = `Could not read that subtitle file: ${err.message || err}`;
+      el.searchCount.textContent = `No se pudo leer ese archivo de subtítulos: ${err.message || err}`;
     }
   }
 
@@ -537,8 +537,8 @@ const fmt = (s) => {
 };
 
 el.play.addEventListener('click', () => (el.video.paused ? el.video.play() : el.video.pause()));
-el.video.addEventListener('play', () => (el.play.textContent = 'Pause'));
-el.video.addEventListener('pause', () => (el.play.textContent = 'Play'));
+el.video.addEventListener('play', () => (el.play.textContent = 'Pausa'));
+el.video.addEventListener('pause', () => (el.play.textContent = 'Reproducir'));
 el.video.addEventListener('click', () => {
   if (revealTap) return (revealTap = false); // that tap was for the controls
   el.video.paused ? el.video.play() : el.video.pause();
@@ -571,7 +571,7 @@ el.video.addEventListener('error', () => {
     3: 'the browser could not decode it',
     4: 'the browser does not support this format',
   };
-  showFailure(current, `Playback failed: ${codes[el.video.error?.code] || 'unknown error'}.`);
+  showFailure(current, `Falló la reproducción: ${codes[el.video.error?.code] || 'error desconocido'}.`);
 });
 
 let lastSave = 0;
@@ -615,7 +615,7 @@ for (const ev of ['playing', 'canplay', 'seeked', 'pause']) el.video.addEventLis
 function runSearch() {
   const q = el.searchInput.value;
   const results = subs.search(q);
-  if (q.trim()) el.searchCount.textContent = `${results.length} line${results.length === 1 ? '' : 's'}`;
+  if (q.trim()) el.searchCount.textContent = `${results.length} línea${results.length === 1 ? '' : 's'}`;
   el.searchResults.innerHTML = results
     .map((r) => `<li data-t="${r.time}"><span class="t">${fmt(r.time)}</span><span>${esc(r.text)}</span></li>`)
     .join('');

@@ -3,27 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>midnight-player</title>
+<title>Medianoche — reproductor de series</title>
 <meta name="description" content="A subtitle-first video player that reads episodes straight off your own disk. Nothing is uploaded.">
 <!-- Inline so the page stays one folder of plain files with no extra request. -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23101012'/%3E%3Cpath d='M12 9.5v13l11-6.5z' fill='%23c8873c'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23101012'/%3E%3Cpath d='M5 15h22a11 11 0 0 1-22 0z' fill='%23c8873c'/%3E%3Cpath d='M12 11c0-2.2 2-2.2 2-4.4M18 11c0-2.2 2-2.2 2-4.4' stroke='%23c8873c' stroke-width='1.7' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <div id="app" class="no-folder">
   <aside id="sidebar">
     <header>
-      <h1>Library</h1>
+      <h1>Biblioteca</h1>
       <div class="head-actions">
-        <button id="btn-folder" title="Choose a different folder">Folder</button>
-        <button id="rescan" title="Read the folder again">Rescan</button>
-        <button id="sidebar-close" title="Close library" aria-label="Close library">✕</button>
+        <button id="btn-folder" title="Elegir otra carpeta">Carpeta</button>
+        <button id="rescan" title="Volver a leer la carpeta">Releer</button>
+        <button id="sidebar-close" title="Cerrar biblioteca" aria-label="Cerrar biblioteca">✕</button>
       </div>
     </header>
     <div id="counts" class="counts"></div>
-    <nav id="tree"><p class="empty-list hint">Nothing here yet. Choose a folder and your episodes will be listed.</p></nav>
+    <nav id="tree"><p class="empty-list hint">Todavía no hay nada. Elige una carpeta y aparecerán tus episodios.</p></nav>
     <section id="unmatched-wrap" hidden>
-      <h2>Not in the library</h2>
+      <h2>Fuera de la biblioteca</h2>
       <ul id="unmatched"></ul>
     </section>
   </aside>
@@ -38,14 +38,14 @@
          folder picker when all that is missing is a click. -->
     <section id="setup" class="setup">
       <div class="setup-inner">
-        <h2 id="setup-title">Choose the folder your episodes are in</h2>
+        <h2 id="setup-title">Elige la carpeta donde están tus episodios</h2>
         <p id="setup-body">
-          This page has no server behind it. Your video and subtitle files are read
-          directly off this device, played in this tab, and never sent anywhere —
-          there is nowhere for them to be sent to.
+          Esta página no tiene un servidor detrás. Tus videos y subtítulos se leen
+          directamente de este dispositivo, se reproducen en esta pestaña y no se envían
+          a ninguna parte: no hay adónde enviarlos.
         </p>
         <div class="setup-actions">
-          <button id="setup-action" class="primary">Choose folder</button>
+          <button id="setup-action" class="primary">Elegir carpeta</button>
         </div>
         <p id="setup-note" class="hint"></p>
         <p id="setup-error" class="hint bad" hidden></p>
@@ -53,20 +53,20 @@
     </section>
 
     <div id="empty" class="empty" hidden>
-      <p>Select an episode.</p>
+      <p>Elige un episodio.</p>
       <p class="hint">
-        <kbd>B</kbd> panel · <kbd>Space</kbd> play · <kbd>←</kbd><kbd>→</kbd> 5s ·
-        <kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd> 10s · <kbd>F</kbd> fullscreen · <kbd>N</kbd> next
+        <kbd>B</kbd> panel · <kbd>Espacio</kbd> reproducir · <kbd>←</kbd><kbd>→</kbd> 5s ·
+        <kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd> 10s · <kbd>F</kbd> pantalla completa · <kbd>N</kbd> siguiente
       </p>
       <p class="hint">
         <kbd>,</kbd><kbd>.</kbd> subtitle delay ±0.25s ·
-        <kbd>Shift</kbd> ±1s · <kbd>Alt</kbd> ±0.05s · <kbd>0</kbd> reset · <kbd>/</kbd> search
+        <kbd>Shift</kbd> ±1s · <kbd>Alt</kbd> ±0.05s · <kbd>0</kbd> reiniciar · <kbd>/</kbd> buscar
       </p>
     </div>
 
     <div id="player" hidden>
       <video id="video" preload="metadata" playsinline></video>
-      <div id="buffering" role="status" aria-live="polite" aria-label="Loading" hidden><span></span></div>
+      <div id="buffering" role="status" aria-live="polite" aria-label="Cargando" hidden><span></span></div>
 
       <div id="subs">
         <div id="sub-primary" class="sub-layer primary"></div>
@@ -74,22 +74,22 @@
 
       <div id="nowplaying">
         <span id="np-title"></span>
-        <span id="np-mode" class="badge">local file</span>
+        <span id="np-mode" class="badge">archivo local</span>
       </div>
 
       <!-- Where you stopped, offered rather than assumed: it has already jumped
            there, and this is the one click that undoes it. -->
       <div id="resume" class="resume-offer" hidden>
         <span id="resume-text"></span>
-        <button id="resume-restart">Start from the beginning</button>
+        <button id="resume-restart">Empezar desde el principio</button>
       </div>
 
       <div id="controls">
         <div class="row">
-          <button id="btn-play" title="Space">Play</button>
+          <button id="btn-play" title="Espacio">Reproducir</button>
           <span id="time" class="time">0:00 / 0:00</span>
           <div id="scrub"><div id="scrub-fill"></div></div>
-          <button id="btn-full" title="F" aria-label="Fullscreen">⛶</button>
+          <button id="btn-full" title="F" aria-label="Pantalla completa">⛶</button>
 
           <!-- display:contents on wide screens, so every child below stays a
                direct flex item of .row and the order values keep the two-tier
@@ -97,12 +97,12 @@
                one scrollable strip of settings under the transport. -->
           <div id="tier2">
           <label class="ctl">
-            <span>Subtitles</span>
+            <span>Subtítulos</span>
             <select id="sel-primary"></select>
           </label>
 
           <div class="ctl delay" id="delay-ctl">
-            <span>Delay</span>
+            <span>Retraso</span>
             <button data-step="-1">−1</button>
             <button data-step="-0.25">−.25</button>
             <button data-step="-0.05">−.05</button>
@@ -110,51 +110,51 @@
             <button data-step="0.05">+.05</button>
             <button data-step="0.25">+.25</button>
             <button data-step="1">+1</button>
-            <button id="delay-reset" title="Reset (0)" aria-label="Reset subtitle delay">↺</button>
+            <button id="delay-reset" title="Reiniciar (0)" aria-label="Reiniciar el retraso de los subtítulos">↺</button>
           </div>
 
           <label class="ctl vol" id="vol-ctl">
-            <span id="vol-icon" title="Mute (M)">Vol</span>
-            <input id="vol" type="range" min="0" max="1" step="0.05" aria-label="Volume">
+            <span id="vol-icon" title="Silenciar (M)">Vol</span>
+            <input id="vol" type="range" min="0" max="1" step="0.05" aria-label="Volumen">
           </label>
 
-          <button id="btn-search" title="/">Search</button>
-          <button id="btn-style">Style</button>
-          <button id="btn-help" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
+          <button id="btn-search" title="/">Buscar</button>
+          <button id="btn-style">Estilo</button>
+          <button id="btn-help" title="Atajos de teclado (?)" aria-label="Atajos de teclado">?</button>
           </div>
         </div>
 
         <div id="help-panel" class="panel" hidden>
           <ul class="keys">
-            <li><kbd>Space</kbd><span>play / pause</span></li>
+            <li><kbd>Espacio</kbd><span>reproducir / pausa</span></li>
             <li><kbd>←</kbd><kbd>→</kbd><span>5 seconds</span></li>
-            <li><kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd><span>10 seconds</span></li>
-            <li><kbd>↑</kbd><kbd>↓</kbd><span>volume</span></li>
-            <li><kbd>M</kbd><span>mute</span></li>
+            <li><kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd><span>10 segundos</span></li>
+            <li><kbd>↑</kbd><kbd>↓</kbd><span>volumen</span></li>
+            <li><kbd>M</kbd><span>silenciar</span></li>
             <li><kbd>,</kbd><kbd>.</kbd><span>subtitle delay, 0.25s</span></li>
-            <li><kbd>Shift</kbd>+<kbd>,</kbd><kbd>.</kbd><span>delay, 1s</span></li>
+            <li><kbd>Shift</kbd>+<kbd>,</kbd><kbd>.</kbd><span>retraso, 1 s</span></li>
             <li><kbd>Alt</kbd>+<kbd>,</kbd><kbd>.</kbd><span>delay, 0.05s</span></li>
-            <li><kbd>0</kbd><span>reset delay</span></li>
-            <li><kbd>V</kbd><span>next subtitle file</span></li>
-            <li><kbd>W</kbd><span>mark watched / unwatched</span></li>
-            <li><kbd>N</kbd><span>next episode</span></li>
-            <li><kbd>B</kbd><span>show / hide library</span></li>
-            <li><kbd>F</kbd><span>fullscreen</span></li>
-            <li><kbd>/</kbd><span>search dialogue</span></li>
-            <li><kbd>Esc</kbd><span>close panel</span></li>
+            <li><kbd>0</kbd><span>reiniciar retraso</span></li>
+            <li><kbd>V</kbd><span>siguiente archivo de subtítulos</span></li>
+            <li><kbd>W</kbd><span>marcar como visto / no visto</span></li>
+            <li><kbd>N</kbd><span>siguiente episodio</span></li>
+            <li><kbd>B</kbd><span>mostrar / ocultar biblioteca</span></li>
+            <li><kbd>F</kbd><span>pantalla completa</span></li>
+            <li><kbd>/</kbd><span>buscar en los diálogos</span></li>
+            <li><kbd>Esc</kbd><span>cerrar panel</span></li>
           </ul>
         </div>
 
         <div id="style-panel" class="panel" hidden>
-          <label>Size <input id="st-size" type="range" min="1.6" max="7" step="0.1"></label>
-          <label>Position <input id="st-bottom" type="range" min="0" max="40" step="1"></label>
-          <label>Background <input id="st-bg" type="range" min="0" max="1" step="0.05"></label>
-          <label>Colour <input id="st-color" type="color"></label>
+          <label>Tamaño <input id="st-size" type="range" min="1.6" max="7" step="0.1"></label>
+          <label>Posición <input id="st-bottom" type="range" min="0" max="40" step="1"></label>
+          <label>Fondo <input id="st-bg" type="range" min="0" max="1" step="0.05"></label>
+          <label>Color <input id="st-color" type="color"></label>
           <label class="check"><input id="st-outline" type="checkbox"> Outline</label>
         </div>
 
         <div id="search-panel" class="panel" hidden>
-          <input id="search-input" type="search" placeholder="Search the dialogue…" autocomplete="off">
+          <input id="search-input" type="search" placeholder="Buscar en los diálogos…" autocomplete="off">
           <div id="search-count" class="hint"></div>
           <ul id="search-results"></ul>
         </div>
@@ -170,7 +170,7 @@
 
     <!-- Touch has no B key, so the drawer needs a handle that is on screen even
          before anything is playing. Hidden on the desktop layout. -->
-    <button id="btn-library" title="Library (B)" aria-label="Show or hide the library">☰</button>
+    <button id="btn-library" title="Biblioteca (B)" aria-label="Mostrar u ocultar la biblioteca">☰</button>
   </main>
 </div>
 
