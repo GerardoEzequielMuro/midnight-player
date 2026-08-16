@@ -421,7 +421,13 @@ el.driveConnect.addEventListener('click', async () => {
 async function restoreDrive(cache) {
   try {
     if (!(await drive.getClientId())) return false;
-    await drive.refresh({ silent: true });
+    // A stored session that is still inside its hour needs nothing from Google
+    // at all. Only when there is none is a silent re-grant worth attempting,
+    // and that can fail for reasons outside our control — an expired Google
+    // session, withdrawn consent, a browser blocking it without a gesture.
+    if (!(await drive.resumeStoredSession())) {
+      await drive.refresh({ silent: true });
+    }
     if (!drive.isConnected()) return false;
     await drive.ensureWorker();
     if (cache?.driveFolder) el.driveFolder.value = cache.driveFolder;

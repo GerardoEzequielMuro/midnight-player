@@ -48,6 +48,47 @@ const ABOUT_URL = 'https://www.googleapis.com/drive/v3/about?fields=user';
  * is the viewer's own address stored on the viewer's own machine — the same
  * thing every "you were signed in as…" screen keeps.
  */
+/*
+ * Keep the session across reloads.
+ *
+ * The token is stored, and that is a deliberate change of mind. The first
+ * version stored nothing, on the principle that a token in localStorage is a
+ * token any script on the page can read — which is true, and was the wrong
+ * trade here. What is being kept is a read-only grant on the viewer's own
+ * Drive, in the viewer's own browser, expiring within the hour, on a page that
+ * loads no third-party code but Google's own sign-in library.
+ *
+ * The cost of not storing it was a fresh sign-in on every single reload, which
+ * is a real, constant harm against a theoretical one.
+ *
+ * Expiry is honoured on the way back in: a token past its time is discarded
+ * rather than sent to Drive to be rejected.
+ */
+const SESSION_KEY = 'midnight.drive.session';
+
+function saveSession() {
+  try {
+    if (!token) return localStorage.removeItem(SESSION_KEY);
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ token, expiresAt: tokenExpiresAt, account }));
+  } catch {
+    // Storage refused: the session just stops surviving reloads.
+  }
+}
+
+function readSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    // A minute of margin, so a token cannot expire between the check and the use.
+    if (!s?.token || !(s.expiresAt > Date.now() + 60000)) return null;
+    return s;
+  } catch {
+    return null;
+  }
+}
+
+
 const HINT_KEY = 'midnight.drive.account';
 
 function savedHint() {
@@ -236,6 +277,7 @@ function keepToken(resp) {
     Math.max(30, seconds - 300) * 1000
   );
 
+  saveSession();
   pushToken();
   announce();
 }
@@ -260,6 +302,36 @@ export async function connect() {
 }
 
 /** A quieter renewal, used by the expiry timer and by a 401 from Drive. */
+/**
+ * Pick a stored session back up, if there is a live one.
+ *
+ * This is the whole point of storing it: no popup, no gesture, no round trip to
+ * Google. A token that is still inside its hour is simply used, and the viewer
+ * never learns that anything happened.
+ *
+ * It returns false rather than throwing when there is nothing to resume, since
+ * "no session" is the ordinary first-visit case and not an error.
+ */
+export async function resumeStoredSession() {
+  const s = readSession();
+  if (!s) return false;
+
+  token = s.token;
+  tokenExpiresAt = s.expiresAt;
+  account = s.account || null;
+
+  // Renew a few minutes before it lapses, so a long episode does not stall
+  // halfway through.
+  const secondsLeft = Math.max(30, Math.floor((tokenExpiresAt - Date.now()) / 1000) - 300);
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(() => { refresh({ silent: true }).catch(() => {}); }, secondsLeft * 1000);
+
+  await pushToken();
+  announce();
+  return true;
+}
+
+
 export async function refresh({ silent = true } = {}) {
   if (refreshing) return refreshing;
   refreshing = (async () => {
@@ -304,6 +376,7 @@ export async function signOut() {
   tokenExpiresAt = 0;
   account = null;
   rememberHint('');
+  try { localStorage.removeItem(SESSION_KEY); } catch {}
   await clearWorkerToken();
   announce();
 }
