@@ -1,0 +1,28 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>preview</title>
+<style>html,body{margin:0;height:100%;background:#000}iframe{width:1280px;height:800px;border:0;display:block}</style>
+</head><body>
+<iframe id="f" src="/"></iframe>
+<script>
+const f = document.getElementById('f');
+f.addEventListener('load', () => {
+  setTimeout(() => {
+    const d = f.contentDocument;
+    // Force the signed-in look without a real token, purely to see the styling.
+    const acct = d.getElementById('drive-account');
+    acct.hidden = false;
+    d.getElementById('drive-user').textContent = 'Conectado como gerardo.ejemplo@gmail.com';
+    d.getElementById('counts').textContent = '24 episodios · 24/26 archivos de subtítulos vinculados';
+    d.getElementById('drive-connect').disabled = false;
+    d.getElementById('drive-connect').textContent = 'Volver a revisar Drive';
+    d.getElementById('drive-folder').disabled = false;
+    d.getElementById('setup-drive').classList.remove('unavailable');
+    d.getElementById('drive-blurb').textContent =
+      'Inicias sesión con tu propia cuenta y Medianoche lee solo tu Drive, sin permiso de escritura. La sesión vive en esta pestaña y desaparece al cerrarla.';
+    const err = d.getElementById('drive-error');
+    err.hidden = false;
+    err.textContent = 'El navegador bloqueó la ventana de Google. Permite las ventanas emergentes de este sitio y vuelve a intentarlo.';
+  }, 400);
+});
+</script>
+</body></html>

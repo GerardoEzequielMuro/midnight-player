@@ -297,7 +297,10 @@ async function useEntries(entries, folderName) {
   renderLibrary(built, folderName);
   // The source rides along with the cache so that, on a later visit, an
   // episode with no file behind it is offered the right way back in.
-  saveLibraryCache({ ...toCache(built, folderName), source });
+  // The folder field is remembered with the library so a silent reconnect scans
+  // the same place. It is a Drive folder id, not a credential.
+  const driveFolder = source === 'drive' ? el.driveFolder.value.trim() : '';
+  saveLibraryCache({ ...toCache(built, folderName), source, driveFolder });
 
   if (pendingId) {
     const id = pendingId;
@@ -398,6 +401,36 @@ el.driveConnect.addEventListener('click', async () => {
     renderDriveAccount(drive.status());
   }
 });
+
+/**
+ * Return to a Drive library without signing in again.
+ *
+ * The access token is deliberately never stored — anything in localStorage is
+ * readable by every script on the page, and a Drive token is worth more than a
+ * library listing. What is safe to remember is that this browser connected
+ * before, which is not a credential at all.
+ *
+ * That is enough, because Google will re-issue a token without prompting as
+ * long as the viewer is still signed in and has not withdrawn consent. So the
+ * ordinary case costs no clicks, and the case where it cannot — consent
+ * revoked, signed out of Google, an hour of inactivity in a fresh browser —
+ * falls back to the button that was always there.
+ */
+async function restoreDrive(cache) {
+  try {
+    if (!(await drive.getClientId())) return false;
+    await drive.refresh({ silent: true });
+    if (!drive.isConnected()) return false;
+    await drive.ensureWorker();
+    if (cache?.driveFolder) el.driveFolder.value = cache.driveFolder;
+    await scanDrive();
+    return true;
+  } catch {
+    // A silent refresh failing is the expected outcome half the time, not an
+    // error worth showing anyone. The Connect button says the rest.
+    return false;
+  }
+}
 
 /** The scan itself, shared by Connect and by Releer. */
 async function scanDrive() {
@@ -1000,12 +1033,20 @@ async function boot() {
 
   // Never awaited on the way to the first paint: the folder route must not wait
   // on anything of Drive's, and a failure in here must not take the page down.
-  initDrive().catch((err) => {
+  const driveReady = initDrive().catch((err) => {
     console.error(err);
     driveError(messageOf(err));
   });
 
   if (!supported) return setupUnsupported();
+
+  // A remembered Drive library lets itself back in when Google will re-issue a
+  // token quietly. Only a success skips the folder route; a failure falls
+  // through to it exactly as before.
+  if (cache?.source === 'drive') {
+    await driveReady;
+    if (await restoreDrive(cache)) return;
+  }
 
   if (hasDirectoryPicker) {
     let handle = null;
