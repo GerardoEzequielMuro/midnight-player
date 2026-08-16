@@ -8,6 +8,11 @@ const DEFAULTS = {
   roots: [],
   subtitleRoots: [],
   port: 8730,
+  // Who may connect. The default only accepts this machine, because the player
+  // hands out any file under the library roots to whoever asks — there is no
+  // login. Set "0.0.0.0" to reach it from a phone on the same wifi, and only on
+  // a network you trust.
+  host: '127.0.0.1',
   cacheDir: './cache',
   seriesAliases: [],
   preferredAudioLang: 'jpn',

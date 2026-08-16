@@ -47,7 +47,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(cfg.port, '127.0.0.1', async () => {
+server.listen(cfg.port, cfg.host, async () => {
   console.log(`\n  midnight-player`);
   console.log(`  ffmpeg   ${path.basename(BIN.ffmpeg)}  (bundled)`);
   console.log(`  library  ${cfg.roots.join('\n           ')}`);

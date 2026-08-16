@@ -9,6 +9,9 @@
   "subtitleRoots": [],
 
   "port": 8730,
+
+  "//host": "Who may connect. 127.0.0.1 (the default) means only this machine. Use 0.0.0.0 to watch from a phone on the same wifi — there is no login, so anyone on that network can browse and stream your library.",
+  "host": "127.0.0.1",
   "cacheDir": "./cache",
 
   "//seriesAliases": "Groups of names that mean the same show. Needed when your videos and your subtitles use different titles for the same series.",
