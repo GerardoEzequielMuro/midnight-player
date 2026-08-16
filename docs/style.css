@@ -1479,3 +1479,104 @@ input[type="checkbox"] {
     transform: translateY(-140px);
   }
 }
+
+/* ==========================================================================
+   Setup — the server-free build
+   The screen a first-time visitor lands on, and the one a returning visitor
+   sees when the browser wants a gesture before handing the folder back. Same
+   box, same one action; only the words change.
+   ========================================================================== */
+
+.setup {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s5) var(--s4);
+  overflow-y: auto;
+}
+/* Width first, then a ceiling — a bare max-width leaves a 48ch box sitting
+   wider than a 390px phone, because flex will not shrink it below its content. */
+.setup-inner {
+  width: 100%;
+  max-width: 48ch;
+}
+
+.setup h2 {
+  margin: 0 0 var(--s3);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -.015em;
+  color: var(--ink);
+  text-wrap: balance;
+}
+
+#setup-body {
+  margin: 0 0 var(--s5);
+  color: var(--ink-2);
+  line-height: 1.62;
+}
+
+.setup-actions { margin-bottom: var(--s4); }
+
+/* The one button on the page that is the point of the page. Still the house
+   lamp, still no gradient — just the accent doing what it does everywhere
+   else: marking the thing you came here for. */
+button.primary {
+  min-height: 40px;
+  padding: 9px 16px;
+  border-color: var(--accent-edge);
+  background: var(--accent-wash);
+  color: var(--accent-lift);
+  font-size: var(--t-md);
+}
+button.primary:hover {
+  border-color: var(--accent);
+  background: #241d15;
+  color: #f0c184;
+}
+
+#setup-note { margin: 0; line-height: 1.65; }
+#setup-error { margin: var(--s3) 0 0; line-height: 1.65; }
+.hint.bad { color: var(--poor); }
+
+.empty-list { padding: var(--s4) var(--gutter); }
+
+/* Without an open folder the list is a memory, so the control that re-reads
+   one is meaningless — Folder, which asks for one, is not. */
+#app.no-folder #rescan { display: none; }
+
+/* ==========================================================================
+   Resume
+   You are already back where you were. This is the undo, and it leaves on its
+   own once it has been ignored long enough.
+   ========================================================================== */
+
+.resume-offer {
+  position: absolute;
+  z-index: 4;
+  top: calc(var(--s4) + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - var(--s5));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2) var(--s3);
+  padding: 7px 8px 7px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--console);
+  font-size: var(--t-sm);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1024px) {
+  /* The title chip has taken the top line by now, so this sits under it. */
+  .resume-offer {
+    top: calc(var(--s2) * 2 + 44px + env(safe-area-inset-top));
+  }
+  .resume-offer button { min-height: 40px; }
+}

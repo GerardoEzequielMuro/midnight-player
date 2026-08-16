@@ -12,7 +12,9 @@
  * lib/subtitles — rather than being fetched as JSON from an endpoint.
  */
 
-const stripTags = (s) => s.replace(/<[^>]*>/g, '');
+// A line break is the one tag that means something once the markup is gone: a
+// search result reading "medianoche.Abrimos" is two sentences pushed together.
+const stripTags = (s) => s.replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]*>/g, '');
 
 /**
  * Cue text arrives already escaped as HTML, because that is how it is rendered

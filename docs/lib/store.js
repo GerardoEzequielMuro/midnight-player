@@ -122,18 +122,39 @@ function openDb() {
     req.onupgradeneeded = () => req.result.createObjectStore(DB_STORE);
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
+    // A version change held open by another tab fires neither of the above.
+    req.onblocked = () => reject(new Error('the database is blocked by another tab'));
   });
 }
 
+/**
+ * IndexedDB can also simply never answer — a locked profile, private mode part
+ * way through refusing, another tab mid-upgrade. Every call here is on the path
+ * to the first frame, so a request that never settles would leave the page
+ * waiting on it forever. It gets a deadline instead, and a missed deadline
+ * means the same thing a missing handle means: ask for the folder.
+ */
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out`)), ms)),
+  ]);
+}
+
 async function withStore(mode, fn) {
-  const db = await openDb();
+  const db = await withTimeout(openDb(), 2000, 'opening the handle store');
   try {
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(DB_STORE, mode);
-      const req = fn(tx.objectStore(DB_STORE));
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
+    return await withTimeout(
+      new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, mode);
+        const req = fn(tx.objectStore(DB_STORE));
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+        tx.onabort = () => reject(tx.error || new Error('aborted'));
+      }),
+      2000,
+      'reading the handle store'
+    );
   } finally {
     db.close();
   }

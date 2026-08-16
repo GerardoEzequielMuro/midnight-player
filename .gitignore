@@ -22,3 +22,6 @@ qa*.json
 work/
 docs/screenshots/
 *.part
+docs/_test.mp4
+docs/_diag.html
+docs/*.mp4
