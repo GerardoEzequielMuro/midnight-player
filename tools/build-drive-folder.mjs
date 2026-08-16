@@ -52,6 +52,7 @@ const sorted = episodes
   .sort((a, b) => a.season - b.season || a.episode - b.episode);
 
 let linked = 0, copied = 0, missing = [];
+const written = new Set();
 const provisional = [];
 
 for (const ep of sorted) {
@@ -73,15 +74,46 @@ for (const ep of sorted) {
 
   const videoOut = path.join(seasonDir, `${stem}${path.extname(ep.path)}`);
   const r1 = await place(ep.path, videoOut);
+  written.add(path.resolve(videoOut));
   r1 === 'linked' ? linked++ : r1 === 'copied' ? copied++ : null;
 
   if (best) {
     const subOut = path.join(seasonDir, `${stem}.es.srt`);
     const r2 = await place(best.path, subOut);
+    written.add(path.resolve(subOut));
     r2 === 'linked' ? linked++ : r2 === 'copied' ? copied++ : null;
   }
 
   console.log(`${tag}  ${stem}${!best ? '   ** NO SUBTITLE **' : isFinal ? '' : '   (provisional subtitle)'}`);
+}
+
+/*
+ * Remove anything in the destination this run did not put there.
+ *
+ * The folder is rebuilt, not maintained. Renaming the episodes into Spanish
+ * left the English-named links sitting beside the new ones, so every episode
+ * appeared twice - 108 files where 60 belong. Uploading that would double the
+ * transfer and hand the player two of everything.
+ *
+ * Only inside the destination, and only the two extensions this tool writes.
+ * They are hard links, so removing one leaves the original file untouched.
+ */
+if (WRITE) {
+  const stale = [];
+  const walk = async (dir) => {
+    let entries = [];
+    try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) await walk(full);
+      else if (/[.](mp4|srt)$/i.test(e.name) && !written.has(path.resolve(full))) stale.push(full);
+    }
+  };
+  await walk(DEST);
+  for (const f of stale) await fs.rm(f, { force: true });
+  if (stale.length) {
+    console.log(`\n${stale.length} file(s) left over from an earlier build were deleted`);
+  }
 }
 
 console.log(`\ndestination: ${DEST}`);

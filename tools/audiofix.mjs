@@ -86,6 +86,23 @@ for (const ep of episodes.sort((a, b) => (a.season ?? 0) - (b.season ?? 0) || (a
   const fixed = applyTimeMap(sub.cues, map);
   const after = profile(audio, fixed);
 
+  /*
+   * Judge the result at a second, coarser windowing as well.
+   *
+   * The map is fitted to sixteen windows, so of course it scores well against
+   * sixteen windows — that is the thing it was built to satisfy, not evidence
+   * that the episode got better. Measured at eight instead, one "improvement"
+   * turned out to have pushed a stretch of S01E03 from 0.7s out to 2.2s: fewer,
+   * wider windows caught a whole region the fit had bent, which sixteen narrow
+   * ones each saw only a sliver of.
+   *
+   * So a correction has to hold up at a windowing it was not fitted to. That is
+   * the difference between measuring the work and marking your own homework.
+   */
+  const COARSE = 8;
+  const beforeCoarse = worstOf(profile(audio, sub.cues, COARSE));
+  const afterCoarse = worstOf(profile(audio, fixed, COARSE));
+
   const w0 = worstOf(before);
   const w1 = worstOf(after);
   const shift = describeShift(sub.cues, fixed);
@@ -113,7 +130,16 @@ for (const ep of episodes.sort((a, b) => (a.season ?? 0) - (b.season ?? 0) || (a
     console.log(`${tag}  REJECTED — would move a line ${biggestMove.toFixed(1)}s, past any real drift\n`);
     continue;
   }
-  if (w1 === null || w1 >= w0) { console.log(`${tag}  no improvement — original kept\n`); continue; }
+  if (afterCoarse !== null && beforeCoarse !== null && afterCoarse > beforeCoarse + 0.05) {
+    console.log(
+      `${tag}  REJECTED — better at 16 windows but worse at ${COARSE} ` +
+        `(${beforeCoarse.toFixed(2)}s -> ${afterCoarse.toFixed(2)}s)
+`
+    );
+    continue;
+  }
+  if (w1 === null || w1 >= w0) { console.log(`${tag}  no improvement — original kept
+`); continue; }
   if (!WRITE) { console.log(`${tag}  would improve ${w0.toFixed(2)}s -> ${w1.toFixed(2)}s (dry run)\n`); continue; }
 
   await fs.copyFile(cand.path, `${cand.path}.orig`);
