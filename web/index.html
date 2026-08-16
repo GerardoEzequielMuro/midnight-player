@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>midnight-player</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <header>
+      <h1>Library</h1>
+      <div class="head-actions">
+        <button id="rescan" title="Rescan folders">Rescan</button>
+        <button id="sidebar-close" title="Close library" aria-label="Close library">✕</button>
+      </div>
+    </header>
+    <div id="counts" class="counts"></div>
+    <nav id="tree"></nav>
+    <section id="unmatched-wrap" hidden>
+      <h2>Unmatched subtitles</h2>
+      <ul id="unmatched"></ul>
+    </section>
+  </aside>
+
+  <!-- Only ever a box on narrow screens, where the library is a drawer over the
+       picture. It is position:fixed, so it never takes a grid column. -->
+  <div id="scrim"></div>
+
+  <main id="stage">
+    <div id="empty" class="empty">
+      <p>Select an episode.</p>
+      <p class="hint">
+        <kbd>B</kbd> panel · <kbd>Space</kbd> play · <kbd>←</kbd><kbd>→</kbd> 5s ·
+        <kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd> 10s · <kbd>F</kbd> fullscreen · <kbd>N</kbd> next
+      </p>
+      <p class="hint">
+        <kbd>V</kbd> subtitle track · <kbd>,</kbd><kbd>.</kbd> delay ±0.25s ·
+        <kbd>Shift</kbd> ±1s · <kbd>Alt</kbd> ±0.05s · <kbd>0</kbd> reset · <kbd>/</kbd> search
+      </p>
+    </div>
+
+    <div id="player" hidden>
+      <video id="video" preload="metadata"></video>
+      <div id="buffering" role="status" aria-live="polite" aria-label="Buffering" hidden><span></span></div>
+
+      <div id="subs">
+        <div id="sub-secondary" class="sub-layer secondary"></div>
+        <div id="sub-primary" class="sub-layer primary"></div>
+      </div>
+
+      <div id="nowplaying">
+        <span id="np-title"></span>
+        <span id="np-mode" class="badge"></span>
+      </div>
+
+      <div id="controls">
+        <div class="row">
+          <button id="btn-play" title="Space">Play</button>
+          <span id="time" class="time">0:00 / 0:00</span>
+          <div id="scrub"><div id="scrub-fill"></div></div>
+          <button id="btn-full" title="F" aria-label="Fullscreen">⛶</button>
+
+          <!-- display:contents on wide screens, so every child below stays a
+               direct flex item of .row and the order values keep the two-tier
+               desktop bar exactly as it was. On a phone it becomes a real box:
+               one scrollable strip of settings under the transport. -->
+          <div id="tier2">
+          <label class="ctl">
+            <span>Subtitles</span>
+            <select id="sel-primary"></select>
+          </label>
+
+          <label class="ctl">
+            <span>Second</span>
+            <select id="sel-secondary"></select>
+          </label>
+
+          <label class="ctl" id="audio-ctl" hidden>
+            <span>Audio</span>
+            <select id="sel-audio"></select>
+          </label>
+
+          <div class="ctl delay" id="delay-ctl">
+            <span>Delay</span>
+            <button data-step="-1">−1</button>
+            <button data-step="-0.25">−.25</button>
+            <button data-step="-0.05">−.05</button>
+            <output id="delay-val">0.00s</output>
+            <button data-step="0.05">+.05</button>
+            <button data-step="0.25">+.25</button>
+            <button data-step="1">+1</button>
+            <button id="delay-reset" title="Reset (0)" aria-label="Reset subtitle delay">↺</button>
+          </div>
+
+          <label class="ctl vol" id="vol-ctl">
+            <span id="vol-icon" title="Mute (M)">Vol</span>
+            <input id="vol" type="range" min="0" max="1" step="0.05" aria-label="Volume">
+          </label>
+
+          <button id="btn-align" title="Line the subtitles up with the audio">Align</button>
+          <button id="btn-search" title="/">Search</button>
+          <button id="btn-style">Style</button>
+          <button id="btn-help" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
+          </div>
+        </div>
+
+        <div id="help-panel" class="panel" hidden>
+          <ul class="keys">
+            <li><kbd>Space</kbd><span>play / pause</span></li>
+            <li><kbd>←</kbd><kbd>→</kbd><span>5 seconds</span></li>
+            <li><kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd><span>10 seconds</span></li>
+            <li><kbd>↑</kbd><kbd>↓</kbd><span>volume</span></li>
+            <li><kbd>M</kbd><span>mute</span></li>
+            <li><kbd>,</kbd><kbd>.</kbd><span>subtitle delay, 0.25s</span></li>
+            <li><kbd>Shift</kbd>+<kbd>,</kbd><kbd>.</kbd><span>delay, 1s</span></li>
+            <li><kbd>Alt</kbd>+<kbd>,</kbd><kbd>.</kbd><span>delay, 0.05s</span></li>
+            <li><kbd>0</kbd><span>reset delay</span></li>
+            <li><kbd>V</kbd><span>next subtitle track</span></li>
+            <li><kbd>Shift</kbd>+<kbd>V</kbd><span>next second track</span></li>
+            <li><kbd>W</kbd><span>mark watched / unwatched</span></li>
+            <li><kbd>N</kbd><span>next episode</span></li>
+            <li><kbd>B</kbd><span>show / hide library</span></li>
+            <li><kbd>F</kbd><span>fullscreen</span></li>
+            <li><kbd>/</kbd><span>search dialogue</span></li>
+            <li><kbd>Esc</kbd><span>close panel</span></li>
+          </ul>
+        </div>
+
+        <div id="align-panel" class="panel" hidden>
+          <div class="align-row">
+            <button id="align-run">Align to audio</button>
+            <span id="align-engine" class="hint"></span>
+          </div>
+
+          <div id="align-progress" hidden>
+            <div class="bar"><div id="align-bar"></div></div>
+            <span id="align-stage" class="hint"></span>
+          </div>
+
+          <div id="align-result" hidden>
+            <span class="verdict" id="align-verdict"></span>
+            <div class="align-numbers">
+              <span><label>Offset</label><output id="al-offset"></output></span>
+              <span><label>Time scale</label><output id="al-ratio"></output></span>
+              <span><label>Confidence</label><output id="al-conf"></output></span>
+            </div>
+            <p id="align-note" class="hint"></p>
+            <div class="align-row">
+              <button id="align-apply">Apply</button>
+              <button id="align-discard">Discard</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="style-panel" class="panel" hidden>
+          <label>Size <input id="st-size" type="range" min="1.6" max="7" step="0.1"></label>
+          <label>Position <input id="st-bottom" type="range" min="0" max="40" step="1"></label>
+          <label>Background <input id="st-bg" type="range" min="0" max="1" step="0.05"></label>
+          <label>Colour <input id="st-color" type="color"></label>
+          <label class="check"><input id="st-outline" type="checkbox"> Outline</label>
+        </div>
+
+        <div id="search-panel" class="panel" hidden>
+          <input id="search-input" type="search" placeholder="Search the dialogue…" autocomplete="off">
+          <div id="search-count" class="hint"></div>
+          <ul id="search-results"></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Touch has no B key, so the drawer needs a handle that is on screen even
+         before anything is playing. Hidden on the desktop layout. -->
+    <button id="btn-library" title="Library (B)" aria-label="Show or hide the library">☰</button>
+
+    <div id="prep" class="prep" hidden>
+      <div class="prep-inner">
+        <p id="prep-title"></p>
+        <p id="prep-reason" class="hint"></p>
+        <div class="bar"><div id="prep-bar"></div></div>
+        <p id="prep-pct" class="hint"></p>
+      </div>
+    </div>
+  </main>
+</div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

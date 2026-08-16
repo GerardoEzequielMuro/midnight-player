@@ -1,0 +1,21 @@
+node_modules/
+
+# Your library paths and your watch state are personal — not shared.
+config.json
+cache/
+
+# Never commit media or subtitles
+*.mkv
+*.mp4
+*.avi
+*.srt
+*.ass
+*.ssa
+*.vtt
+.gemini_key
+.forth_token
+qa.json
+qa.err
+*.log
+qa*.json
+*.srt.orig

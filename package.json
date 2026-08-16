@@ -1,0 +1,26 @@
+{
+  "name": "midnight-player",
+  "version": "0.1.0",
+  "description": "Local video player for watching series with subtitles. Runs on your machine, plays in your browser.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "start": "node server/index.js",
+    "setup": "node node_modules/ffmpeg-static/install.js",
+    "test": "node test/make-fixtures.mjs && node test/subs.test.mjs && node test/align.test.mjs && node test/retime.test.mjs",
+    "retime": "node tools/retime.mjs",
+    "autosync": "node tools/autosync.mjs",
+    "translate": "node tools/translate.mjs",
+    "translate:gemini": "node tools/translate-gemini.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.117.1",
+    "ffmpeg-static": "^5.3.0",
+    "ffprobe-static": "^3.1.0",
+    "iconv-lite": "^0.7.0",
+    "jschardet": "^3.1.4"
+  }
+}

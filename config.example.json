@@ -1,0 +1,24 @@
+{
+  "//": "Copy to config.json and edit. Or skip it: npm start -- \"D:\\Series\" \"E:\\More\"",
+
+  "roots": [
+    "C:\\path\\to\\your\\series"
+  ],
+
+  "//subtitleRoots": "Extra folders scanned for subtitle files only. Useful when subs live somewhere else (a Downloads folder) instead of next to the videos.",
+  "subtitleRoots": [],
+
+  "port": 8730,
+  "cacheDir": "./cache",
+
+  "//seriesAliases": "Groups of names that mean the same show. Needed when your videos and your subtitles use different titles for the same series.",
+  "seriesAliases": [
+    ["shinya shokudo", "shinya shokudou", "midnight diner"]
+  ],
+
+  "//preferredAudioLang": "ISO-639-2 code of the audio track to auto-select when a file has several. Keeps you on the original language instead of a dub. Empty string = use the file's default track.",
+  "preferredAudioLang": "jpn",
+
+  "//assumeHevcSupport": "Set true if your browser plays HEVC/H.265 (Edge on Windows with the HEVC Video Extension does). Saves a slow transcode. If video stays black, set it back to false.",
+  "assumeHevcSupport": false
+}

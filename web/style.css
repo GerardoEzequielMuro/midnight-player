@@ -1,0 +1,1481 @@
+/* ==========================================================================
+   midnight-player
+   --------------------------------------------------------------------------
+   Dark, quiet, built for watching at night. The film is the subject; every
+   surface here is chrome that should be easy to read once and then forgotten.
+
+   Rules this sheet holds itself to:
+     · One accent — the warm lamp (#c8873c). It marks progress, position and
+       the thing you chose. Nothing else is coloured for effect.
+     · No decorative gradients, no ambient glows, no motion that isn't
+       reporting a state change.
+     · Surfaces come from a four-step value ladder plus a hairline. Depth is
+       made of contrast and space, not shadow.
+     · Spacing is a scale used unevenly on purpose: tight inside a group,
+       generous between groups.
+   ========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces ------------------------------------------------------------ */
+  --void:      #000;      /* the film itself, and the stage behind it */
+  --bg:        #080809;
+  --surface:   #101012;   /* library panel */
+  --surface-2: #171719;   /* consoles, panels, inputs */
+  --surface-3: #1e1e21;   /* hover */
+  --console:   rgba(13, 13, 14, .94);  /* slabs that sit over the picture */
+
+  /* Hairlines ----------------------------------------------------------- */
+  --line:      #212124;
+  --line-2:    #2c2c31;
+  --line-3:    #3a3a41;   /* hover edge */
+
+  /* Ink — warm-neutral, never a pure grey ------------------------------- */
+  --ink:       #e9e6e1;
+  --ink-2:     #9a968f;
+  --ink-3:     #6c6962;
+
+  /* The lamp ------------------------------------------------------------ */
+  --accent:      #c8873c;
+  --accent-lift: #dfa25c;              /* ink weight on dark; focus ring */
+  --accent-edge: rgba(200, 135, 60, .42);
+  --accent-wash: #1c1712;              /* the row you are on */
+  --warn:        #b4703a;
+
+  /* Verdicts. Two coloured states and one deliberately colourless one:
+     confident reads as the house lamp, wrong as a dull brick, and "not sure"
+     is left grey because that is honestly what it is. */
+  --poor:      #c47a63;
+  --poor-edge: rgba(196, 122, 99, .45);
+
+  /* Spacing ------------------------------------------------------------- */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+
+  /* Radii. Nested boxes subtract their parent's padding so the arcs sit
+     concentric: console 10 − 4 padding = 6 inside. */
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 10px;
+
+  /* Type ---------------------------------------------------------------- */
+  --font: ui-sans-serif, system-ui, "Segoe UI Variable Text", "Segoe UI",
+          Roboto, "Helvetica Neue", sans-serif;
+  --t-micro: 10.5px;   /* structural labels only */
+  --t-xs:    11.5px;   /* metadata */
+  --t-sm:    12.5px;   /* controls */
+  --t-md:    13.5px;   /* body, episode titles */
+  --t-lg:    16px;     /* series titles, headings */
+
+  --gutter: var(--s4);        /* library panel gutter */
+  --head-h: 52px;             /* library header — sticky offset depends on it */
+  --sidebar-w: 330px;
+  --ease: cubic-bezier(.2, .6, .3, 1);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font: var(--t-md) / 1.5 var(--font);
+  -webkit-font-smoothing: antialiased;
+  text-size-adjust: 100%;
+}
+
+::selection { background: rgba(200, 135, 60, .3); color: #fff; }
+
+/* Thin, quiet scrollbars — the list should not be framed by a chrome slab. */
+#sidebar, #search-results {
+  scrollbar-width: thin;
+  scrollbar-color: #2b2b30 transparent;
+}
+#sidebar::-webkit-scrollbar,
+#search-results::-webkit-scrollbar { width: 10px; }
+#sidebar::-webkit-scrollbar-track,
+#search-results::-webkit-scrollbar-track { background: transparent; }
+#sidebar::-webkit-scrollbar-thumb,
+#search-results::-webkit-scrollbar-thumb {
+  background: #2b2b30;
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 5px;
+}
+#sidebar::-webkit-scrollbar-thumb:hover,
+#search-results::-webkit-scrollbar-thumb:hover { background: #3d3d44; background-clip: content-box; }
+
+/* One focus treatment, used everywhere, in the house colour. */
+:focus-visible {
+  outline: 2px solid var(--accent-lift);
+  outline-offset: 2px;
+}
+
+#app {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  height: 100%;
+}
+/*
+ * One column, not "0 1fr".
+ *
+ * Hiding the sidebar with display:none removes it as a grid item, so the stage
+ * becomes the FIRST item and lands in the zero-width column — collapsing the
+ * video to nothing. With the sidebar gone there is exactly one item, so the
+ * track list has to describe exactly one column.
+ */
+#app.collapsed { grid-template-columns: 1fr; }
+#app.collapsed #sidebar { display: none; }
+
+/* Both of these belong to the narrow layouts at the foot of this sheet, which
+   do nothing but switch their `display` on. Kept out of the flow here so
+   neither is ever a grid item, and so the button never adds height to the
+   stage on the desktop layout. */
+#scrim,
+#btn-library { display: none; }
+
+#scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+  background: rgba(0, 0, 0, .6);
+}
+
+#btn-library {
+  position: absolute;
+  top: calc(var(--s2) + env(safe-area-inset-top));
+  left: calc(var(--s2) + env(safe-area-inset-left));
+  z-index: 5;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  background: var(--console);
+  font-size: 15px;
+}
+/* Once a file is on screen the handle goes with the rest of the chrome. Before
+   that it is the only way into the library, so it stays put. */
+#stage:has(:where(#player):not([hidden])) #btn-library {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .16s var(--ease);
+}
+#stage.show-ui #btn-library { opacity: 1; pointer-events: auto; }
+
+/* ==========================================================================
+   Library
+   ========================================================================== */
+
+/* The panel sits above the stage and casts a tight edge onto it, so the seam
+   between list and picture is an overlap rather than a drawn line. */
+#sidebar {
+  position: relative;
+  z-index: 1;
+  background: var(--surface);
+  box-shadow:
+    1px 0 0 var(--line),
+    14px 0 20px -14px rgba(0, 0, 0, .9);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: var(--s7);
+}
+
+#sidebar header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: var(--head-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: 0 var(--gutter);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+#sidebar-close { display: none; }
+
+#sidebar h1 {
+  margin: 0;
+  font-size: var(--t-micro);
+  font-weight: 600;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+#sidebar h2 {
+  margin: var(--s6) var(--gutter) var(--s2);
+  font-size: var(--t-micro);
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.counts {
+  padding: var(--s3) var(--gutter) var(--s2);
+  color: var(--ink-3);
+  font-size: var(--t-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.series-title {
+  margin-top: var(--s5);
+  padding: 0 var(--gutter) var(--s1);
+  font-size: var(--t-lg);
+  font-weight: 600;
+  letter-spacing: -.012em;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.series-title:first-child { margin-top: var(--s2); }
+
+/* Season headings pin under the library header so you always know where you
+   are in a long list. */
+.season-title {
+  position: sticky;
+  top: var(--head-h);
+  z-index: 2;
+  margin-top: var(--s4);
+  padding: var(--s2) var(--gutter) 6px;
+  background: var(--surface);
+  font-size: var(--t-micro);
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.series-title + .season-title { margin-top: 2px; }
+
+/* Three columns, hard-aligned: identifier · title · what subtitles exist. */
+.ep {
+  display: grid;
+  grid-template-columns: 3.4rem minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: var(--s3);
+  padding: 6px var(--gutter) 7px calc(var(--gutter) - 2px);
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  transition: background-color .1s var(--ease);
+}
+.ep:hover { background: #16161a; }
+
+.ep.active {
+  background: var(--accent-wash);
+  border-left-color: var(--accent);
+}
+
+.ep .num {
+  font-size: 12.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .01em;
+  color: var(--ink-2);
+}
+.ep .name {
+  font-size: var(--t-md);
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* These files often carry no episode title, in which case the number is the
+   only thing to read — so it takes the ink the title would have had. */
+.ep:has(.name:empty) .num { color: var(--ink); }
+
+.ep .marks {
+  font-size: var(--t-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.ep .marks .none { color: var(--warn); }
+
+/* Watched: silent until you go looking for it, then a lit check that stays. */
+.ep .watch {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-right: -5px;
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 1;
+  color: transparent;
+  cursor: pointer;
+  transition: color .12s var(--ease), background-color .12s var(--ease);
+}
+.ep:hover .watch { color: var(--ink-3); }
+.ep .watch:hover { background: var(--surface-3); color: var(--ink-2); }
+.ep .watch.on { color: var(--accent); }
+.ep .watch.on:hover { background: var(--surface-3); color: var(--accent-lift); }
+
+.ep:hover .num,
+.ep:hover .marks { color: var(--ink-2); }
+.ep.active .num,
+.ep.active .name { color: var(--ink); }
+.ep.active .marks { color: var(--ink-2); }
+
+.ep.watched .name,
+.ep.watched .num { color: var(--ink-3); }
+.ep.watched.active .name,
+.ep.watched.active .num { color: var(--ink-2); }
+
+/* How far you got, drawn into the bottom edge of its own row. The inline
+   width is `calc(% - 28px)`, so the two margins must total exactly 28. */
+.resume {
+  height: 2px;
+  margin: -1px 12px 3px var(--gutter);
+  border-radius: 1px;
+  background: rgba(200, 135, 60, .34);
+}
+.ep.active + .resume { background: rgba(200, 135, 60, .8); }
+
+#unmatched {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--gutter);
+  font-size: var(--t-xs);
+  color: var(--ink-2);
+}
+#unmatched li {
+  padding: var(--s2) 0;
+  line-height: 1.45;
+  word-break: break-word;
+}
+#unmatched li + li { border-top: 1px solid var(--line); }
+#unmatched .why { color: var(--warn); }
+
+/* ==========================================================================
+   Stage
+   ========================================================================== */
+
+#stage {
+  position: relative;
+  background: var(--void);
+  overflow: hidden;
+}
+
+#player { position: relative; height: 100%; }
+video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--void);
+}
+
+/* Empty state: the keyboard map, since that is how this thing is actually
+   driven once an episode is playing. */
+.empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s5);
+  color: var(--ink-2);
+}
+.empty p:first-child {
+  margin: 0 0 var(--s6);
+  font-size: 15px;
+  color: var(--ink-2);
+}
+.empty .hint {
+  margin: 0 0 var(--s3);
+  max-width: 620px;
+  text-align: center;
+  line-height: 2.3;
+  text-wrap: balance;
+}
+
+.hint {
+  color: var(--ink-3);
+  font-size: var(--t-xs);
+}
+
+kbd {
+  display: inline-block;
+  min-width: 20px;
+  margin: 0 1px;
+  padding: 2px 5px;
+  border: 1px solid var(--line-2);
+  border-bottom-color: #171719;
+  border-radius: 3px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font: 500 var(--t-micro) / 1.4 var(--font);
+  text-align: center;
+}
+
+/* ---------- now playing ---------- */
+
+/* A chip, not a scrim: it states what is on screen and gets out of the way. */
+#nowplaying {
+  position: absolute;
+  top: var(--s4);
+  left: var(--s4);
+  right: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: 7px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--console);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .16s var(--ease);
+}
+#stage.show-ui #nowplaying { opacity: 1; }
+
+#np-title {
+  font-size: var(--t-sm);
+  font-weight: 550;
+  color: var(--ink);
+  letter-spacing: .005em;
+}
+
+.badge {
+  padding: 2px 6px;
+  border: 1px solid var(--line-2);
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.badge.hot {
+  color: var(--accent-lift);
+  border-color: var(--accent-edge);
+}
+
+/* ---------- preparing a file ---------- */
+
+.prep {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--void);
+}
+.prep-inner { width: min(440px, 82%); }
+
+#prep-title {
+  margin: 0;
+  font-size: var(--t-lg);
+  font-weight: 550;
+  color: var(--ink);
+  letter-spacing: -.01em;
+}
+#prep-reason { margin: 6px 0 0; }
+#prep-pct {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.bar {
+  height: 3px;
+  margin: var(--s4) 0 var(--s2);
+  border-radius: 2px;
+  background: #ffffff14;
+  overflow: hidden;
+}
+#prep-bar,
+#align-bar {
+  height: 100%;
+  width: 0;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width .2s var(--ease);
+}
+
+/* ==========================================================================
+   Subtitles
+   Font size, colour, background opacity and vertical position are written
+   inline by the style panel. Nothing here may fight those.
+   ========================================================================== */
+
+#subs {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.sub-layer {
+  position: absolute;
+  left: 5%;
+  right: 5%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .2em;
+  text-align: center;
+  line-height: 1.34;
+  font-weight: 500;
+  letter-spacing: .002em;
+  text-wrap: balance;
+}
+.sub-layer.primary { bottom: 6%; }
+.sub-layer.secondary {
+  top: 6%;
+  font-style: italic;
+  font-weight: 400;
+}
+
+.sub-layer .cue {
+  padding: .08em .42em;
+  border-radius: 2px;
+  background: var(--sub-bg, rgba(0, 0, 0, .55));
+  white-space: pre-wrap;
+}
+
+/* ==========================================================================
+   Controls
+   A single slab that appears on movement and leaves again. Inside it the
+   transport sits on its own line above a hairline, and settings and actions
+   share the line below — so the bar has a fixed two-tier shape instead of
+   wrapping differently at every width.
+   ========================================================================== */
+
+#controls {
+  position: absolute;
+  inset: auto var(--s4) var(--s4);
+  max-width: 1180px;
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s1);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  background: var(--console);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .16s var(--ease);
+}
+/* An open panel holds the console open. Reading one takes longer than the idle
+   timer, and on a touch screen there is no pointer to keep it alive. */
+#stage.show-ui #controls,
+#controls:focus-within,
+#controls:has(.panel:not([hidden])) { opacity: 1; pointer-events: auto; }
+
+/* Panels open above the transport; the transport keeps the bottom edge. */
+#controls .row { order: 2; }
+#controls .panel { order: 1; }
+
+#controls .row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--s3);
+  row-gap: var(--s2);
+  padding: var(--s2) var(--s3) 10px;
+}
+
+/* The settings tier is wrapped in a box in the markup, but on this layout it
+   has to stay transparent: display:contents keeps its children as flex items of
+   .row so the order values below still describe one bar. */
+#tier2 { display: contents; }
+
+/* Tier 1 — transport: what is playing, where you are, how loud. */
+#btn-play  { order: 10; min-width: 62px; }
+#time      { order: 20; }
+#scrub     { order: 30; flex: 1 1 180px; }
+#vol-ctl   { order: 40; flex: 0 0 auto; }
+
+/* The forced break, which is also the rule dividing transport from settings.
+   Without it the row wraps at a different place at every width. */
+#controls .row::after {
+  content: "";
+  order: 50;
+  flex: 1 0 100%;
+  height: 1px;
+  margin: 2px 0 1px;
+  background: var(--line);
+}
+
+/* Tier 2 — what you are watching it with, then the actions, pushed right. */
+.ctl        { order: 60; }
+#delay-ctl  { order: 70; margin-right: auto; }
+
+/* A second break, switched on only once one settings line stops fitting. It
+   sits between the track pickers and the delay, so the narrow layout reads
+   transport / tracks / timing + actions rather than breaking mid-group. */
+#controls .row::before {
+  content: "";
+  display: none;
+  order: 65;
+  flex: 1 0 100%;
+  height: 0;
+}
+
+/* A third select only appears on files with more than one audio track, and it
+   is exactly what tips the settings tier over at full width. */
+#controls .row:has(#audio-ctl:not([hidden]))::before { display: block; }
+
+#btn-align  { order: 90; }
+#btn-search { order: 100; }
+#btn-style  { order: 110; }
+#btn-help   { order: 120; }
+#btn-full   { order: 130; }
+
+.time {
+  font-size: var(--t-xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .01em;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+/* ---------- scrub ---------- */
+
+#scrub {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 16px;
+  min-width: 140px;
+  cursor: pointer;
+  touch-action: none;
+}
+#scrub::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 2px;
+  background: #ffffff1f;
+}
+#scrub-fill {
+  position: relative;
+  height: 3px;
+  width: 0;
+  border-radius: 2px;
+  background: var(--accent);
+}
+/* The head only shows when you are aiming at the bar. */
+#scrub-fill::after {
+  content: "";
+  position: absolute;
+  right: -5px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--accent-lift);
+  opacity: 0;
+  transition: opacity .12s var(--ease);
+}
+#scrub:hover #scrub-fill::after { opacity: 1; }
+
+/* ---------- buttons ---------- */
+
+button {
+  appearance: none;
+  padding: 6px 11px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font: 500 var(--t-sm) / 1.35 var(--font);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color .12s var(--ease),
+              border-color .12s var(--ease),
+              color .12s var(--ease);
+}
+button:hover {
+  background: var(--surface-3);
+  border-color: var(--line-3);
+  color: var(--ink);
+}
+button:active { background: #101012; }
+button:disabled {
+  opacity: .45;
+  cursor: default;
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--ink-3);
+}
+
+#sidebar header button { padding: 4px 9px; font-size: var(--t-xs); }
+
+#btn-play { color: var(--ink); }
+
+#btn-full {
+  width: 32px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  height: 30px;
+  font-size: 13px;
+}
+
+/* ---------- labelled selects ---------- */
+
+.ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  font-size: var(--t-sm);
+  color: var(--ink-3);
+}
+.ctl > span {
+  color: var(--ink-3);
+  font-size: var(--t-xs);
+  white-space: nowrap;
+}
+
+select {
+  appearance: none;
+  max-width: 180px;
+  padding: 6px 26px 6px 9px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background-color: var(--surface-2);
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%239a968f' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  background-size: 9px 6px;
+  color: var(--ink);
+  font: 400 var(--t-sm) / 1.35 var(--font);
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background-color .12s var(--ease), border-color .12s var(--ease);
+}
+select:hover {
+  background-color: var(--surface-3);
+  border-color: var(--line-3);
+}
+option {
+  background: #17171a;
+  color: var(--ink);
+}
+
+/* ---------- delay: one segmented control, not seven loose buttons ---------- */
+
+.ctl.delay {
+  gap: 0;
+  padding: 2px;
+  border: 1px solid var(--line-2);
+  border-radius: 5px;
+  background: #1b1b1e;
+}
+.ctl.delay > span { padding: 0 var(--s2) 0 6px; }
+
+.ctl.delay button {
+  min-width: 32px;
+  padding: 3px 5px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  font-size: var(--t-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.ctl.delay button:hover { background: var(--surface-3); color: var(--ink); }
+.ctl.delay button:active { background: #0e0e10; }
+
+.ctl.delay output {
+  min-width: 58px;
+  padding: 0 var(--s2);
+  border-inline: 1px solid var(--line-2);
+  color: var(--ink);
+  font-size: var(--t-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.ctl.delay.shifted output { color: var(--accent-lift); }
+
+#delay-reset {
+  margin-left: 2px;
+  border-left: 1px solid var(--line-2);
+  border-radius: 0 3px 3px 0;
+  min-width: 28px;
+  font-size: var(--t-sm);
+}
+
+/* ---------- volume ---------- */
+
+#vol-ctl { gap: 6px; }
+
+#vol-icon {
+  padding: 2px 5px;
+  border-radius: 3px;
+  color: var(--ink-3);
+  font-size: var(--t-xs);
+  cursor: pointer;
+  user-select: none;
+  transition: color .12s var(--ease), background-color .12s var(--ease);
+}
+#vol-icon:hover {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+#vol { width: 82px; }
+#vol::-webkit-slider-thumb { width: 10px; height: 10px; margin-top: -3.5px; }
+#vol::-moz-range-thumb { width: 10px; height: 10px; }
+
+/* Muted is a struck label and a slider drained of contrast — the control is
+   still there and still draggable, it just has nothing to say. */
+#vol-ctl.muted #vol-icon {
+  color: var(--ink-3);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 1px;
+}
+#vol-ctl.muted #vol { opacity: .35; }
+
+/* ---------- help ---------- */
+
+#btn-help {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 30px;
+  padding: 0;
+  border-color: var(--line);
+  background: transparent;
+  color: var(--ink-3);
+  font-size: var(--t-md);
+}
+#btn-help:hover {
+  background: var(--surface-2);
+  border-color: var(--line-2);
+  color: var(--ink-2);
+}
+
+/* ==========================================================================
+   Panels
+   Nested one level inside the console. Radius is the console's minus its
+   padding so the corners stay concentric.
+   ========================================================================== */
+
+.panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3) var(--s5);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  font-size: var(--t-sm);
+  color: var(--ink-2);
+}
+.panel label {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--ink-2);
+}
+.panel label.check { gap: 6px; }
+
+/* ---------- form controls inside panels ---------- */
+
+input[type="range"] {
+  appearance: none;
+  width: 128px;
+  height: 16px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: #ffffff1f;
+}
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4.5px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ink);
+}
+input[type="range"]:hover::-webkit-slider-thumb { background: #fff; }
+input[type="range"]::-moz-range-track {
+  height: 3px;
+  border-radius: 2px;
+  background: #ffffff1f;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ink);
+}
+
+input[type="color"] {
+  width: 34px;
+  height: 24px;
+  padding: 2px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  cursor: pointer;
+}
+input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 2px; }
+
+input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* ---------- search ---------- */
+
+/* A column that scrolls. `.panel` wraps by default, and a wrapping column with
+   a capped height throws its overflow into a second column instead of
+   scrolling — which put the results outside the panel. */
+#search-panel {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: var(--s2);
+  max-height: 38vh;
+}
+
+#search-input {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  color: var(--ink);
+  font: 400 var(--t-md) / 1.4 var(--font);
+}
+#search-input::placeholder { color: var(--ink-3); }
+#search-input:hover { border-color: var(--line-3); }
+
+#search-count {
+  font-variant-numeric: tabular-nums;
+  padding-left: 2px;
+}
+
+#search-results {
+  flex: 1 1 auto;
+  min-height: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+#search-results li {
+  display: grid;
+  grid-template-columns: 4.6rem minmax(0, 1fr);
+  gap: var(--s3);
+  padding: 6px var(--s2) 7px;
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  font-size: var(--t-md);
+  cursor: pointer;
+}
+#search-results li + li { box-shadow: inset 0 1px 0 var(--line); }
+#search-results li:hover { background: var(--surface-3); }
+#search-results .t {
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--t-xs);
+  white-space: nowrap;
+  padding-top: 2px;
+}
+#search-results li:hover .t { color: var(--accent-lift); }
+
+/* ==========================================================================
+   Subtitle alignment
+   A proposal, not an action: it measures, states how sure it is, and waits.
+   ========================================================================== */
+
+#align-panel {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: var(--s3);
+  max-width: 620px;
+}
+
+.align-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+}
+
+/* The one filled control in the interface. Both of these commit something. */
+#align-run,
+#align-apply {
+  border-color: transparent;
+  background: var(--accent);
+  color: #17110a;
+  font-weight: 600;
+}
+#align-run:hover,
+#align-apply:hover {
+  background: var(--accent-lift);
+  border-color: transparent;
+  color: #17110a;
+}
+#align-run:active,
+#align-apply:active { background: #b97931; }
+#align-run:disabled,
+#align-apply:disabled {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--ink-3);
+}
+
+#align-discard { background: transparent; }
+
+#align-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+#align-progress .bar {
+  flex: 1;
+  margin: 0;
+  min-width: 120px;
+}
+#align-stage { white-space: nowrap; }
+
+#align-result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+/* State is carried by the word first. Colour only separates "this is fine"
+   from "this is wrong"; "not sure" stays grey, which is the truth. */
+.verdict {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.verdict.good {
+  color: var(--accent-lift);
+  border-color: var(--accent-edge);
+}
+.verdict.uncertain { color: var(--ink-2); }
+.verdict.poor {
+  color: var(--poor);
+  border-color: var(--poor-edge);
+}
+
+.align-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3) var(--s6);
+}
+.align-numbers > * {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.align-numbers label {
+  font-size: var(--t-micro);
+  font-weight: 600;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.align-numbers output {
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -.015em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+#align-note {
+  margin: 0;
+  max-width: 60ch;
+  line-height: 1.6;
+}
+
+/* ==========================================================================
+   Keyboard map
+   Seventeen shortcuts, so it is set as a reference sheet: columns divided by
+   a rule, keys on the left, what they do aligned to a common right edge.
+   ========================================================================== */
+
+#help-panel {
+  display: block;
+  padding: var(--s3) var(--s4);
+}
+
+.keys {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  columns: 260px;
+  column-gap: var(--s6);
+  column-rule: 1px solid var(--line);
+}
+.keys li {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  padding: 3px 0;
+  break-inside: avoid;
+  font-size: var(--t-sm);
+  color: var(--ink-3);      /* the "+" between keys */
+}
+.keys li > span {
+  margin-left: auto;
+  padding-left: var(--s4);
+  text-align: right;
+  color: var(--ink-2);
+}
+.keys kbd { margin: 0; }
+
+/* ==========================================================================
+   Buffering
+   The only thing in here that moves on its own, because it is the only thing
+   that has to say "still working" without knowing how long it will take.
+   ========================================================================== */
+
+#buffering {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+/* A small plate, so the indicator is legible over a bright frame without
+   dimming the picture. */
+#buffering::before {
+  content: "";
+  grid-area: 1 / 1;
+  width: 120px;
+  height: 26px;
+  border-radius: 5px;
+  background: rgba(10, 10, 11, .7);
+}
+#buffering span {
+  grid-area: 1 / 1;
+  position: relative;
+  width: 88px;
+  height: 2px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, .16);
+  overflow: hidden;
+}
+#buffering span::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 34%;
+  border-radius: 1px;
+  background: var(--accent);
+  animation: buffer-sweep 1.2s var(--ease) infinite;
+}
+@keyframes buffer-sweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(294%); }
+}
+
+/* ==========================================================================
+   Narrow windows
+   The library is 330px wide, so a 1100px window leaves the console about
+   750px. Tighten the settings line rather than let it break apart.
+   ========================================================================== */
+
+@media (max-width: 1440px) {
+  select { max-width: 148px; }
+}
+
+/* Below this the settings and the actions stop sharing a line, so they are
+   given one each rather than being left to break wherever they land. */
+@media (max-width: 1420px) {
+  #controls .row { column-gap: 10px; }
+  #controls .row::before { display: block; }
+}
+
+@media (max-width: 1200px) {
+  select { max-width: 118px; padding-right: 22px; background-position: right 7px center; }
+  .ctl { gap: 6px; }
+  .ctl.delay button { min-width: 28px; padding: 3px 3px; }
+  .ctl.delay output { min-width: 52px; padding: 0 6px; }
+  .ctl.delay > span { padding: 0 6px 0 5px; }
+  button { padding: 6px 9px; }
+  #vol { width: 66px; }
+}
+
+@media (max-width: 980px) {
+  :root { --sidebar-w: 268px; }
+  select { max-width: 98px; }
+  .keys { columns: 220px; }
+}
+
+/* ==========================================================================
+   Motion
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  #buffering span::after { width: 100%; opacity: .55; }
+}
+
+/*
+ * The `hidden` attribute only sets display:none through the UA stylesheet, so
+ * any author `display` rule beats it. Several panels here are flex containers,
+ * which silently made hidden="" do nothing — they kept their box and pushed the
+ * video out of view. This has to win over every display rule in this file.
+ */
+[hidden] { display: none !important; }
+
+/* Lift the subtitles clear of the console while it is on screen. Two states:
+   the bar on its own, which is the case that matters and is measured exactly,
+   and any panel open, which is measured in vh so it still holds on a short
+   window. A very tall panel on a very short window will cover the line — at
+   that point the panel is what you are reading. */
+.sub-layer.primary { transition: transform .16s var(--ease); }
+#stage.show-ui .sub-layer.primary { transform: translateY(-96px); }
+/* :where() keeps this weaker than the panel rule below it — :has() inherits
+   the specificity of its argument, and the panel case must still win. */
+#stage.show-ui:has(:where(#audio-ctl):not([hidden])) .sub-layer.primary { transform: translateY(-178px); }
+#stage.show-ui:has(#controls .panel:not([hidden])) .sub-layer.primary { transform: translateY(-38vh); }
+
+/* Below 1420px the console gains a third tier, so the bar-only lift grows. */
+@media (max-width: 1420px) {
+  #stage.show-ui .sub-layer.primary { transform: translateY(-178px); }
+}
+
+
+/* ==========================================================================
+   Small screens
+   Three moves, in this order:
+
+     ≤1024px — a touch screen. No B key, so the library gets a handle on the
+       picture; and the console folds from a bar that wraps into two fixed
+       tiers: the transport, then one strip that slides sideways holding
+       everything else. Nothing is dropped — a wrapped bar on a 550px stage was
+       four and five rows deep and ate the picture.
+
+     601–1024px — the library is still a column, only narrower.
+
+     ≤600px, or any window too short to spend height on (a phone held sideways)
+       — the library stops being a column and becomes a drawer over the picture.
+   ========================================================================== */
+
+@media (max-width: 1024px) {
+  #btn-library { display: grid; }
+
+  /* The handle now stands in the corner the title chip used. */
+  #nowplaying {
+    top: calc(var(--s2) + env(safe-area-inset-top));
+    left: calc(var(--s2) * 2 + 44px + env(safe-area-inset-left));
+    right: calc(var(--s2) + env(safe-area-inset-right));
+  }
+  #np-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ---------- console ---------- */
+
+  #controls {
+    inset: auto calc(var(--s2) + env(safe-area-inset-right))
+           calc(var(--s2) + env(safe-area-inset-bottom))
+           calc(var(--s2) + env(safe-area-inset-left));
+  }
+  #controls .row {
+    column-gap: var(--s2);
+    row-gap: 6px;
+    padding: 6px 6px 7px;
+  }
+
+  /* Fullscreen joins the transport; everything else drops into the strip. */
+  #btn-full { order: 35; }
+
+  #tier2 {
+    order: 60;
+    flex: 1 1 100%;
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    /* One line that slides beats four that stack: the console keeps a known
+       height, so the picture keeps its room and the subtitles keep their lift.
+       The last control is cut off at the edge on purpose — that is the only
+       thing telling you there is more of it. */
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    padding-bottom: 1px;
+  }
+  #tier2::-webkit-scrollbar { display: none; }
+  /* The desktop order values sort one wrapped bar; inside the strip they only
+     scramble it. Written order is already the order you read it in. */
+  #tier2 > * { flex: 0 0 auto; order: 0; }
+
+  /* Both forced breaks belong to a bar that wraps. This one doesn't. */
+  #controls .row::before,
+  #controls .row:has(#audio-ctl:not([hidden]))::before { display: none; }
+
+  #controls button,
+  #controls select { min-height: 44px; }
+  #btn-play { min-width: 66px; }
+  #btn-full,
+  #btn-help { width: 44px; height: 44px; }
+  #btn-help { font-size: var(--t-md); }
+  .ctl.delay button { min-width: 40px; min-height: 40px; }
+  #delay-reset { min-width: 44px; }
+  select { max-width: 132px; }
+  #vol { width: 76px; }
+
+  /* Flex breaks a line on the basis, not the min — 180px of it was enough to
+     push the fullscreen button onto a line of its own. */
+  #scrub { flex: 1 1 90px; min-width: 90px; height: 32px; }
+  /* Nothing hovers a touch screen, so the head has to be there to be aimed at. */
+  #scrub-fill::after { opacity: 1; }
+
+  /* ---------- panels are sheets, not popovers ---------- */
+
+  #controls .panel {
+    gap: var(--s2) var(--s4);
+    padding: var(--s3);
+    max-height: 44vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  #style-panel {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+  }
+  #style-panel label {
+    justify-content: space-between;
+    min-height: 40px;
+  }
+  #style-panel label.check { justify-content: flex-start; }
+  #style-panel input[type="range"] {
+    flex: 1 1 auto;
+    width: auto;
+    max-width: 62%;
+  }
+  #search-input { min-height: 44px; }
+  #search-results li { padding: 10px var(--s2) 11px; }
+  #align-panel { max-width: none; }
+
+  /* Two tiers of console, so the line clears exactly that — this replaces both
+     of the desktop pair, including the one the third select used to trigger. */
+  #stage.show-ui .sub-layer.primary,
+  #stage.show-ui:has(:where(#audio-ctl):not([hidden])) .sub-layer.primary {
+    transform: translateY(-112px);
+  }
+  #stage.show-ui:has(#controls .panel:not([hidden])) .sub-layer.primary {
+    transform: translateY(-46vh);
+  }
+}
+
+@media (min-width: 601px) and (max-width: 1024px) {
+  :root { --sidebar-w: 244px; --gutter: 12px; }
+}
+
+@media (max-width: 600px), (max-height: 480px) and (orientation: landscape) {
+  :root {
+    /* The season headings stick under the header, so the notch has to be part
+       of the header's own height or they pin to the wrong line. */
+    --head-h: calc(52px + env(safe-area-inset-top));
+    --gutter: 14px;
+  }
+
+  /* The library stops being a column. position:fixed takes it out of flow
+     altogether, so the stage is the only item left and holds the full width
+     open or shut — which lets the collapsed rule keep using display:none
+     without the empty column that used to swallow the video. */
+  #app { grid-template-columns: 1fr; }
+
+  #sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    width: min(84vw, 320px);
+    padding-left: env(safe-area-inset-left);
+    padding-bottom: calc(var(--s7) + env(safe-area-inset-bottom));
+    box-shadow: 1px 0 0 var(--line), 14px 0 32px -12px rgba(0, 0, 0, .95);
+  }
+  #sidebar header { padding-top: env(safe-area-inset-top); }
+
+  #sidebar-close {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 34px;
+    padding: 0;
+  }
+
+  #scrim { display: block; }
+  #app.collapsed #scrim { display: none; }
+
+  /* A row is a target now, not just a line of text — and the watched tick has
+     to be visible to be aimed at, since nothing here hovers. */
+  .ep { padding-top: 9px; padding-bottom: 10px; }
+  .ep .watch { width: 30px; height: 30px; color: var(--ink-3); }
+
+  /* The keyboard map is the wrong thing to hand someone holding a phone; it is
+     still one tap away under ?. */
+  .empty { padding: var(--s5) var(--s4); }
+  .empty .hint { display: none; }
+  .keys { columns: 1; }
+  .keys li { padding: 5px 0; }
+}
+
+/* A phone held sideways carries the same two-tier console in a third of the
+   height, so the line has further to climb to clear it: 134 of console plus its
+   inset, less the 6% the line already sits at. */
+@media (max-height: 480px) and (orientation: landscape) {
+  #stage.show-ui .sub-layer.primary,
+  #stage.show-ui:has(:where(#audio-ctl):not([hidden])) .sub-layer.primary {
+    transform: translateY(-140px);
+  }
+}
