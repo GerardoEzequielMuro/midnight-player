@@ -46,8 +46,27 @@ for (const ep of episodes.sort((a, b) => (a.season ?? 0) - (b.season ?? 0) || (a
   const f = ep.subs.find((s) => /\.es-419\.srt$/i.test(s.file) && !/retimed/i.test(s.file));
   if (!f) continue;
   const text = (await loadSubtitle(f.path)).cues.map((c) => c.text).join(' ');
-  const found = text.match(VOSEO) || [];
-  rows.push({ tag, voseo: found.length, neutral: (text.match(NEUTRAL) || []).length, markers: [...new Set(found.map((m) => m.toLowerCase()))] });
+  /*
+   * Keep the phrase around each marker, not just the word.
+   *
+   * Some of these are only regional in one of their senses: "dale" as an
+   * interjection is Rioplatense, while "dale tiempo" is the ordinary imperative
+   * every Spanish speaker uses. The bare word cannot tell them apart, and three
+   * separate flags turned out to be that kind, each costing a trip to go and
+   * look. Printing the context makes a wrong flag obvious at a glance, which is
+   * the difference between a check people read and one they learn to ignore.
+   */
+  const plain = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+  const found = [...plain.matchAll(VOSEO)].map((m) => ({
+    word: m[0].toLowerCase(),
+    around: plain.slice(Math.max(0, m.index - 26), m.index + 30).trim(),
+  }));
+  rows.push({
+    tag,
+    voseo: found.length,
+    neutral: (text.match(NEUTRAL) || []).length,
+    hits: found,
+  });
 }
 
 if (!rows.length) { console.log('no finished translations to compare yet'); process.exit(0); }
@@ -59,8 +78,9 @@ const odd = rows.filter((r) => r.voseo > 0);
 for (const r of rows) {
   console.log(
     `${r.tag}  argentino ${String(r.voseo).padStart(3)}   neutral ${String(r.neutral).padStart(3)}   ` +
-      (r.voseo ? `<-- ${r.markers.slice(0, 6).join(', ')}` : 'clean')
+      (r.voseo ? '' : 'clean')
   );
+  for (const h of r.hits) console.log(`      ${h.word.padEnd(9)} … ${h.around} …`);
 }
 console.log(
   odd.length
