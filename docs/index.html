@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>midnight-player</title>
+<meta name="description" content="A subtitle-first video player that reads episodes straight off your own disk. Nothing is uploaded.">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div id="app" class="no-folder">
+  <aside id="sidebar">
+    <header>
+      <h1>Library</h1>
+      <div class="head-actions">
+        <button id="btn-folder" title="Choose a different folder">Folder</button>
+        <button id="rescan" title="Read the folder again">Rescan</button>
+        <button id="sidebar-close" title="Close library" aria-label="Close library">✕</button>
+      </div>
+    </header>
+    <div id="counts" class="counts"></div>
+    <nav id="tree"></nav>
+    <section id="unmatched-wrap" hidden>
+      <h2>Not in the library</h2>
+      <ul id="unmatched"></ul>
+    </section>
+  </aside>
+
+  <!-- Only ever a box on narrow screens, where the library is a drawer over the
+       picture. It is position:fixed, so it never takes a grid column. -->
+  <div id="scrim"></div>
+
+  <main id="stage">
+    <!-- First run, and every later moment where the page needs the folder back.
+         One screen with one action, so a returning visitor is never handed the
+         folder picker when all that is missing is a click. -->
+    <section id="setup" class="setup">
+      <div class="setup-inner">
+        <h2 id="setup-title">Choose the folder your episodes are in</h2>
+        <p id="setup-body">
+          This page has no server behind it. Your video and subtitle files are read
+          directly off this device, played in this tab, and never sent anywhere —
+          there is nowhere for them to be sent to.
+        </p>
+        <div class="setup-actions">
+          <button id="setup-action" class="primary">Choose folder</button>
+        </div>
+        <p id="setup-note" class="hint"></p>
+        <p id="setup-error" class="hint bad" hidden></p>
+      </div>
+    </section>
+
+    <div id="empty" class="empty" hidden>
+      <p>Select an episode.</p>
+      <p class="hint">
+        <kbd>B</kbd> panel · <kbd>Space</kbd> play · <kbd>←</kbd><kbd>→</kbd> 5s ·
+        <kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd> 10s · <kbd>F</kbd> fullscreen · <kbd>N</kbd> next
+      </p>
+      <p class="hint">
+        <kbd>,</kbd><kbd>.</kbd> subtitle delay ±0.25s ·
+        <kbd>Shift</kbd> ±1s · <kbd>Alt</kbd> ±0.05s · <kbd>0</kbd> reset · <kbd>/</kbd> search
+      </p>
+    </div>
+
+    <div id="player" hidden>
+      <video id="video" preload="metadata" playsinline></video>
+      <div id="buffering" role="status" aria-live="polite" aria-label="Loading" hidden><span></span></div>
+
+      <div id="subs">
+        <div id="sub-primary" class="sub-layer primary"></div>
+      </div>
+
+      <div id="nowplaying">
+        <span id="np-title"></span>
+        <span id="np-mode" class="badge">local file</span>
+      </div>
+
+      <!-- Where you stopped, offered rather than assumed: it has already jumped
+           there, and this is the one click that undoes it. -->
+      <div id="resume" class="resume-offer" hidden>
+        <span id="resume-text"></span>
+        <button id="resume-restart">Start from the beginning</button>
+      </div>
+
+      <div id="controls">
+        <div class="row">
+          <button id="btn-play" title="Space">Play</button>
+          <span id="time" class="time">0:00 / 0:00</span>
+          <div id="scrub"><div id="scrub-fill"></div></div>
+          <button id="btn-full" title="F" aria-label="Fullscreen">⛶</button>
+
+          <!-- display:contents on wide screens, so every child below stays a
+               direct flex item of .row and the order values keep the two-tier
+               desktop bar exactly as it was. On a phone it becomes a real box:
+               one scrollable strip of settings under the transport. -->
+          <div id="tier2">
+          <label class="ctl">
+            <span>Subtitles</span>
+            <select id="sel-primary"></select>
+          </label>
+
+          <div class="ctl delay" id="delay-ctl">
+            <span>Delay</span>
+            <button data-step="-1">−1</button>
+            <button data-step="-0.25">−.25</button>
+            <button data-step="-0.05">−.05</button>
+            <output id="delay-val">0.00s</output>
+            <button data-step="0.05">+.05</button>
+            <button data-step="0.25">+.25</button>
+            <button data-step="1">+1</button>
+            <button id="delay-reset" title="Reset (0)" aria-label="Reset subtitle delay">↺</button>
+          </div>
+
+          <label class="ctl vol" id="vol-ctl">
+            <span id="vol-icon" title="Mute (M)">Vol</span>
+            <input id="vol" type="range" min="0" max="1" step="0.05" aria-label="Volume">
+          </label>
+
+          <button id="btn-search" title="/">Search</button>
+          <button id="btn-style">Style</button>
+          <button id="btn-help" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
+          </div>
+        </div>
+
+        <div id="help-panel" class="panel" hidden>
+          <ul class="keys">
+            <li><kbd>Space</kbd><span>play / pause</span></li>
+            <li><kbd>←</kbd><kbd>→</kbd><span>5 seconds</span></li>
+            <li><kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd><span>10 seconds</span></li>
+            <li><kbd>↑</kbd><kbd>↓</kbd><span>volume</span></li>
+            <li><kbd>M</kbd><span>mute</span></li>
+            <li><kbd>,</kbd><kbd>.</kbd><span>subtitle delay, 0.25s</span></li>
+            <li><kbd>Shift</kbd>+<kbd>,</kbd><kbd>.</kbd><span>delay, 1s</span></li>
+            <li><kbd>Alt</kbd>+<kbd>,</kbd><kbd>.</kbd><span>delay, 0.05s</span></li>
+            <li><kbd>0</kbd><span>reset delay</span></li>
+            <li><kbd>V</kbd><span>next subtitle file</span></li>
+            <li><kbd>W</kbd><span>mark watched / unwatched</span></li>
+            <li><kbd>N</kbd><span>next episode</span></li>
+            <li><kbd>B</kbd><span>show / hide library</span></li>
+            <li><kbd>F</kbd><span>fullscreen</span></li>
+            <li><kbd>/</kbd><span>search dialogue</span></li>
+            <li><kbd>Esc</kbd><span>close panel</span></li>
+          </ul>
+        </div>
+
+        <div id="style-panel" class="panel" hidden>
+          <label>Size <input id="st-size" type="range" min="1.6" max="7" step="0.1"></label>
+          <label>Position <input id="st-bottom" type="range" min="0" max="40" step="1"></label>
+          <label>Background <input id="st-bg" type="range" min="0" max="1" step="0.05"></label>
+          <label>Colour <input id="st-color" type="color"></label>
+          <label class="check"><input id="st-outline" type="checkbox"> Outline</label>
+        </div>
+
+        <div id="search-panel" class="panel" hidden>
+          <input id="search-input" type="search" placeholder="Search the dialogue…" autocomplete="off">
+          <div id="search-count" class="hint"></div>
+          <ul id="search-results"></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Touch has no B key, so the drawer needs a handle that is on screen even
+         before anything is playing. Hidden on the desktop layout. -->
+    <button id="btn-library" title="Library (B)" aria-label="Show or hide the library">☰</button>
+  </main>
+</div>
+
+<!-- The fallback route. Kept out of the way rather than out of the document:
+     it is the only folder picker Firefox and Safari have. -->
+<input id="folder-input" type="file" webkitdirectory directory multiple hidden>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>

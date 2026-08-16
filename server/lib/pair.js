@@ -35,8 +35,41 @@ const epKey = (k, s, e) => `${k}|${s}|${e}`;
  * done on (series, season, episode) with three tiers, and anything that does
  * not land cleanly is reported as unmatched rather than guessed into place.
  */
+/**
+ * Collapse several files of the same episode down to one.
+ *
+ * Rewrapping an MKV as MP4 leaves both on disk, and without this the library
+ * lists every episode twice — same title, same number, two entries, and no way
+ * to tell which is which. Preference goes to the container a browser can open
+ * on its own, since that is the one that will actually play.
+ */
+const CONTAINER_RANK = ['.mp4', '.m4v', '.webm', '.mkv', '.avi'];
+
+function dedupeByEpisode(videos) {
+  const best = new Map();
+  const loose = [];
+
+  for (const v of videos) {
+    // Anything we could not place stays listed; there is nothing to collapse it
+    // against, and dropping it would hide the file entirely.
+    if (v.parsed.season == null || v.parsed.episode == null) {
+      loose.push(v);
+      continue;
+    }
+    const key = `${v.parsed.titleKey}|${v.parsed.season}|${v.parsed.episode}`;
+    const rank = (f) => {
+      const i = CONTAINER_RANK.indexOf(f.path.slice(f.path.lastIndexOf('.')).toLowerCase());
+      return i === -1 ? CONTAINER_RANK.length : i;
+    };
+    const held = best.get(key);
+    if (!held || rank(v) < rank(held)) best.set(key, v);
+  }
+  return [...best.values(), ...loose];
+}
+
+
 export function pairLibrary(videos, subs, cfg, overrides = {}) {
-  const episodes = videos.map((v) => ({
+  const episodes = dedupeByEpisode(videos).map((v) => ({
     ...v,
     key: canonicalKey(v.parsed.titleKey, cfg.aliasMap),
     season: v.parsed.season,

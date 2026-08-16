@@ -13,19 +13,21 @@
  * failure, a file that is well timed but missing half its lines.
  */
 import path from 'node:path';
+import fs from 'node:fs/promises';
 import { loadConfig } from '../server/lib/config.js';
 import { scanLibrary } from '../server/lib/scan.js';
 import { pairLibrary } from '../server/lib/pair.js';
 import { loadSubtitle } from '../server/lib/subtitles/index.js';
-import { extractEmbedded, embeddedTrackKind } from '../server/lib/subtitles/extract.js';
+import { findReference } from '../server/lib/reference.js';
 import { cueVector, FRAME_MS } from '../server/lib/align/vad.js';
 
+const BS = String.fromCharCode(92); // a literal backslash, kept out of regex literals
 const JUNK = [
   [/~/, 'tilde'],
   [/\{[^}]*\}/, 'ass-braces'],
   [/&[a-z]+;|&#\d+;/i, 'entity'],
   [/<(?!\/?i>)[^>]+>/i, 'html-tag'],
-  [/\N|\n/, 'ass-newline'],
+  [new RegExp(BS + BS + '[Nnh]'), 'ass-newline'],
   [/\|/, 'pipe'],
   [/^\s*[-–—]\s*$/m, 'empty-dash'],
 ];
@@ -65,25 +67,35 @@ for (const ep of episodes.sort((a, b) => (a.season ?? 0) - (b.season ?? 0) || (a
   const tag = `S${String(ep.season ?? 0).padStart(2, '0')}E${String(ep.episode ?? 0).padStart(2, '0')}`;
   if (ep.media?.error) { rows.push({ tag, error: ep.media.error }); continue; }
 
-  const embedded = (ep.media?.subtitles || []).filter((s) => embeddedTrackKind(s.codec) === 'text');
-  const videoBase = path.basename(ep.path, path.extname(ep.path)).toLowerCase();
-  const sidecar = ep.subs.find(
-    (s) => path.dirname(s.path).toLowerCase() === path.dirname(ep.path).toLowerCase() &&
-           path.basename(s.path, path.extname(s.path)).toLowerCase() === videoBase
-  );
-
-  let reference = null, refKind = 'none';
-  try {
-    if (embedded.length) { reference = await loadSubtitle(await extractEmbedded(cfg, ep, embedded[0].index)); refKind = 'embedded'; }
-    else if (sidecar) { reference = await loadSubtitle(sidecar.path); refKind = 'sidecar'; }
-  } catch (err) { refKind = `failed: ${err.message}`; }
+  const found = await findReference(cfg, ep);
+  let reference = null;
+  let refKind = found ? found.kind : 'none';
+  if (found) {
+    try {
+      reference = await loadSubtitle(found.path);
+    } catch (err) {
+      refKind = `failed: ${err.message}`;
+    }
+  }
 
   const frames = Math.round(((ep.media?.duration || 1500) * 1000) / FRAME_MS);
   const tracks = [];
   for (const s of ep.subs) {
     let sub;
     try { sub = await loadSubtitle(s.path); } catch { continue; }
-    const text = sub.cues.map((c) => c.text).join('\n');
+    /*
+     * Judge the file as it sits on disk, not the parsed cues. The parser stores
+     * text as limited HTML - line breaks become <br>, quotes become &quot; - so
+     * scanning parsed cues reports stray markup on every well-formed file. The
+     * first version of this flagged all thirty episodes for junk they did not
+     * have.
+     */
+    let text = '';
+    try {
+      text = await fs.readFile(s.path, 'utf8');
+    } catch {
+      text = sub.cues.map((c) => c.text).join('\n');
+    }
     tracks.push({
       file: s.file,
       lang: sub.detectedLang || s.lang || '?',
@@ -91,7 +103,7 @@ for (const ep of episodes.sort((a, b) => (a.season ?? 0) - (b.season ?? 0) || (a
       overlap: reference ? Number(overlap(reference.cues, sub.cues, frames).toFixed(2)) : null,
       hole: reference ? biggestHole(reference.cues, sub.cues) : null,
       junk: JUNK.filter(([re]) => re.test(text)).map(([, name]) => name),
-      isReference: sidecar && s.path === sidecar.path,
+      isReference: !!found && s.path === found.path,
     });
   }
   rows.push({ tag, refKind, refCues: reference?.cueCount ?? 0, duration: Math.round(ep.media?.duration || 0), tracks });

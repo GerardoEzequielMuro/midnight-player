@@ -23,7 +23,7 @@ import { loadConfig } from '../server/lib/config.js';
 import { scanLibrary } from '../server/lib/scan.js';
 import { pairLibrary } from '../server/lib/pair.js';
 import { loadSubtitle } from '../server/lib/subtitles/index.js';
-import { extractEmbedded, embeddedTrackKind } from '../server/lib/subtitles/extract.js';
+import { findReference } from '../server/lib/reference.js';
 import { toSrt } from '../server/lib/subtitles/retime.js';
 
 const API = 'https://generativelanguage.googleapis.com/v1beta';
@@ -291,16 +291,8 @@ async function translateBatch(cues, offset, total, all) {
 
 /** The subtitle that is already correct for this exact video file. */
 async function findSource(cfg, ep) {
-  const embedded = (ep.media?.subtitles || []).filter((s) => embeddedTrackKind(s.codec) === 'text');
-  if (embedded.length) return extractEmbedded(cfg, ep, embedded[0].index);
-
-  const base = path.basename(ep.path, path.extname(ep.path)).toLowerCase();
-  const sidecar = ep.subs.find(
-    (s) =>
-      path.dirname(s.path).toLowerCase() === path.dirname(ep.path).toLowerCase() &&
-      path.basename(s.path, path.extname(s.path)).toLowerCase() === base
-  );
-  return sidecar ? sidecar.path : null;
+  const found = await findReference(cfg, ep);
+  return found ? found.path : null;
 }
 
 async function translateEpisode(cfg, ep, tag) {

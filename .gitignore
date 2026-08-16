@@ -19,3 +19,6 @@ qa.err
 *.log
 qa*.json
 *.srt.orig
+work/
+docs/screenshots/
+*.part

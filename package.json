@@ -11,7 +11,13 @@
     "retime": "node tools/retime.mjs",
     "autosync": "node tools/autosync.mjs",
     "translate": "node tools/translate.mjs",
-    "translate:gemini": "node tools/translate-gemini.mjs"
+    "translate:gemini": "node tools/translate-gemini.mjs",
+    "qa": "node tools/qa.mjs",
+    "audiocheck": "node tools/audiocheck.mjs",
+    "gendercheck": "node tools/gendercheck.mjs",
+    "registercheck": "node tools/registercheck.mjs",
+    "audit": "node tools/audiocheck.mjs && node tools/gendercheck.mjs && node tools/registercheck.mjs",
+    "drive": "node tools/build-drive-folder.mjs"
   },
   "engines": {
     "node": ">=18"
