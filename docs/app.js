@@ -824,6 +824,17 @@ function flush() {
   if (!current || !Number.isFinite(el.video.currentTime) || el.video.currentTime < 1) return;
   saveProgress(true);
 }
+/*
+ * Pausing is the other moment worth writing on.
+ *
+ * Progress is throttled to once every five seconds while playing, and flushed
+ * when the tab goes away. Between those two sits the common case: pause, sit
+ * for a moment, then reload or close. pagehide is unreliable enough across
+ * browsers that it should not be the only thing standing between a viewer and
+ * their place in the episode.
+ */
+el.video.addEventListener('pause', () => saveProgress(true));
+
 window.addEventListener('pagehide', flush);
 document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && flush());
 

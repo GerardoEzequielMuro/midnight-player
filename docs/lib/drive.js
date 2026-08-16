@@ -36,6 +36,38 @@ const GIS_SRC = 'https://accounts.google.com/gsi/client';
 const FILES_URL = 'https://www.googleapis.com/drive/v3/files';
 const ABOUT_URL = 'https://www.googleapis.com/drive/v3/about?fields=user';
 
+/*
+ * Remember which account, so the silent re-grant has something to aim at.
+ *
+ * The token is still never stored — that part does not change. But a silent
+ * request with no hint asks Google to guess who you are, and Google will not
+ * guess: it refuses, and the page falls back to the sign-in button. Which is
+ * exactly the bug, a fresh sign-in on every reload.
+ *
+ * An email address is not a credential. It unlocks nothing on its own, and it
+ * is the viewer's own address stored on the viewer's own machine — the same
+ * thing every "you were signed in as…" screen keeps.
+ */
+const HINT_KEY = 'midnight.drive.account';
+
+function savedHint() {
+  try {
+    return localStorage.getItem(HINT_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+function rememberHint(email) {
+  try {
+    if (email) localStorage.setItem(HINT_KEY, email);
+    else localStorage.removeItem(HINT_KEY);
+  } catch {
+    // A browser refusing storage costs a click, not correctness.
+  }
+}
+
+
 /** Read-only, and nothing else. */
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
 
@@ -170,7 +202,7 @@ const gisMessage = (code) => GIS_MESSAGES[code] || GIS_MESSAGES.unknown;
  * the session and the grant; when it does not, GIS reports back rather than
  * stealing focus, and the caller falls through to asking properly.
  */
-function requestToken(client, { silent = false } = {}) {
+function requestToken(client, { silent = false, hint = '' } = {}) {
   return new Promise((resolve, reject) => {
     let settled = false;
     const done = (fn, value) => { if (!settled) { settled = true; fn(value); } };
@@ -183,7 +215,7 @@ function requestToken(client, { silent = false } = {}) {
     client.error_callback = (err) => done(reject, new DriveError(err?.type || 'unknown', gisMessage(err?.type)));
 
     try {
-      client.requestAccessToken(silent ? { prompt: '' } : {});
+      client.requestAccessToken(silent ? { prompt: '', ...(hint ? { hint } : {}) } : {});
     } catch (err) {
       done(reject, new DriveError('request-failed', String(err?.message || err)));
     }
@@ -232,7 +264,7 @@ export async function refresh({ silent = true } = {}) {
   if (refreshing) return refreshing;
   refreshing = (async () => {
     const client = await ensureTokenClient();
-    const resp = await requestToken(client, { silent });
+    const resp = await requestToken(client, { silent, hint: silent ? savedHint() : '' });
     keepToken(resp);
     // A refresh that is really a restore — a returning visitor let back in
     // without a click — has never been told whose Drive this is. Asking now is
@@ -259,6 +291,7 @@ async function loadAccount() {
     const res = await authedFetch(ABOUT_URL);
     const data = await res.json();
     account = { name: data?.user?.displayName || '', email: data?.user?.emailAddress || '' };
+    rememberHint(account.email);
   } catch {
     account = { name: '', email: '' };
   }
@@ -270,6 +303,7 @@ export async function signOut() {
   token = null;
   tokenExpiresAt = 0;
   account = null;
+  rememberHint('');
   await clearWorkerToken();
   announce();
 }
