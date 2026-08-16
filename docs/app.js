@@ -189,7 +189,7 @@ function setupContinue(handle) {
   showSetup({
     title: 'Hola de nuevo',
     body: `Tu biblioteca está acá. Este navegador necesita un clic antes de volver a leer “${handle.name}”.`,
-    action: 'Continue',
+    action: 'Continuar',
     note: PRIVACY,
     onAction: async () => {
       try {

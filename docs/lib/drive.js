@@ -234,6 +234,13 @@ export async function refresh({ silent = true } = {}) {
     const client = await ensureTokenClient();
     const resp = await requestToken(client, { silent });
     keepToken(resp);
+    // A refresh that is really a restore — a returning visitor let back in
+    // without a click — has never been told whose Drive this is. Asking now is
+    // what puts the address on "Conectado como …" instead of a placeholder.
+    if (!account) {
+      await loadAccount();
+      announce();
+    }
     return token;
   })();
   try {
