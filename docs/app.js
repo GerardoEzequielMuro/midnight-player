@@ -11,6 +11,7 @@ import {
   loadLibraryCache, saveLibraryCache,
   loadDirHandle, saveDirHandle, forgetDirHandle,
 } from './lib/store.js';
+import * as drive from './lib/drive.js';
 
 /**
  * midnight-player, without the server.
@@ -73,6 +74,15 @@ const el = {
   btnFolder: $('#btn-folder'),
   rescan: $('#rescan'),
   folderInput: $('#folder-input'),
+  npMode: $('#np-mode'),
+  setupDrive: $('#setup-drive'),
+  driveBlurb: $('#drive-blurb'),
+  driveConnect: $('#drive-connect'),
+  driveFolder: $('#drive-folder'),
+  driveError: $('#drive-error'),
+  driveAccount: $('#drive-account'),
+  driveUser: $('#drive-user'),
+  driveSignout: $('#drive-signout'),
 };
 
 const subs = new Subtitles(el.video, $('#sub-primary'));
@@ -87,6 +97,8 @@ let rootHandle = null;
 let objectUrl = null;
 let pendingId = null;  // an episode asked for before the folder was open
 let loadToken = 0;     // guards the async subtitle read against a fast switch
+let source = 'folder'; // 'folder' | 'drive' — which of the two ways in is live
+let sourceName = '';   // the folder's name, or the connected Drive account
 
 // ---------- layout ----------
 
@@ -133,6 +145,7 @@ function showSetup({ title, body, action, note = '', onAction = null }) {
   el.setupNote.textContent = note;
   el.setupNote.hidden = !note;
   el.setupError.hidden = true;
+  el.driveError.hidden = true;
   el.setupAction.hidden = !action;
   if (action) el.setupAction.textContent = action;
   setupAction = onAction || (() => {});
@@ -209,12 +222,27 @@ function setupUnsupported() {
     title: 'Este navegador no puede abrir una carpeta',
     body:
       'Leer una carpeta necesita la API de acceso al sistema de archivos o un campo de carpeta, y este navegador no ' +
-      'tiene ninguno de los dos, así que nada de esto va a funcionar. Un Chrome, Edge, Firefox o Safari reciente sí.',
+      'tiene ninguno de los dos. Un Chrome, Edge, Firefox o Safari reciente sí. Google Drive, acá abajo, no depende ' +
+      'de eso y puede funcionar igual.',
     action: null,
   });
 }
 
+/**
+ * An episode that is in the library but has no file behind it. Which of the two
+ * ways in went missing decides what is offered first — the folder button is on
+ * this screen either way, and so is Drive.
+ */
 function askForFolder(reason) {
+  if (source === 'drive') {
+    return showSetup({
+      title: 'Vuelve a conectar Drive para reproducirlo',
+      body: reason,
+      action: 'Elegir carpeta',
+      note: PRIVACY,
+      onAction: pickFolder,
+    });
+  }
   showSetup({
     title: 'Abre la carpeta para reproducirlo',
     body: reason,
@@ -252,6 +280,7 @@ el.folderInput.addEventListener('change', async () => {
 
 async function useHandle(handle) {
   rootHandle = handle;
+  source = 'folder';
   try {
     const entries = await scanDirectory(handle);
     await useEntries(entries, handle.name || '');
@@ -264,15 +293,20 @@ async function useHandle(handle) {
 async function useEntries(entries, folderName) {
   const built = buildLibrary(entries, titles);
   live = true;
+  sourceName = folderName;
   renderLibrary(built, folderName);
-  saveLibraryCache(toCache(built, folderName));
+  // The source rides along with the cache so that, on a later visit, an
+  // episode with no file behind it is offered the right way back in.
+  saveLibraryCache({ ...toCache(built, folderName), source });
 
   if (pendingId) {
     const id = pendingId;
     pendingId = null;
     if (order.find((e) => e.id === id)?.entry) return open(id);
     showScreen('setup');
-    return setupError('Ese episodio no está en esta carpeta.');
+    return setupError(
+      source === 'drive' ? 'Ese episodio no está en ese Drive.' : 'Ese episodio no está en esta carpeta.'
+    );
   }
   // The folder is open and nothing is playing, so on a phone the list is now
   // the only thing worth looking at.
@@ -285,11 +319,140 @@ el.btnFolder.addEventListener('click', pickFolder);
 el.rescan.addEventListener('click', async () => {
   el.rescan.textContent = 'Leyendo…';
   try {
-    if (rootHandle) await useHandle(rootHandle);
+    if (source === 'drive' && drive.isConnected()) await scanDrive();
+    else if (rootHandle) await useHandle(rootHandle);
     else await pickFolder();
+  } catch (err) {
+    driveError(messageOf(err));
   } finally {
     el.rescan.textContent = 'Releer';
   }
+});
+
+// ---------- Google Drive, the second way in ----------
+
+/**
+ * The Drive panel is drawn in every state, including the one where nobody has
+ * configured a client id: an option that silently disappears is a bug report,
+ * and an option that explains itself is not. Nothing in here can affect the
+ * folder route — a failure only ever writes into #drive-error.
+ */
+async function initDrive() {
+  el.setupDrive.hidden = false;
+  drive.onChange(renderDriveAccount);
+  renderDriveAccount(drive.status());
+
+  const clientId = await drive.getClientId();
+  if (!clientId) {
+    el.driveConnect.disabled = true;
+    el.driveFolder.disabled = true;
+    el.setupDrive.classList.add('unavailable');
+    el.driveBlurb.textContent =
+      'Google Drive está desactivado en esta copia de Medianoche: falta pegar el ID de cliente de OAuth en config.js. ' +
+      'Elegir carpeta, acá arriba, funciona igual.';
+    return;
+  }
+
+  // The worker is what makes Drive video seekable, and it only installs over
+  // https or localhost. Better to say so now than at the first press of play.
+  if (!('serviceWorker' in navigator) || !window.isSecureContext) {
+    el.driveBlurb.textContent =
+      'Google Drive necesita que la página se abra por https (o localhost) para poder reproducir video. ' +
+      'Así como está abierta ahora, no va a funcionar.';
+  }
+}
+
+function driveError(message) {
+  el.driveError.textContent = message || '';
+  el.driveError.hidden = !message;
+}
+
+const messageOf = (err) => String(err?.message || err || 'Algo salió mal.');
+
+function renderDriveAccount(state) {
+  const on = !!state?.connected;
+  el.driveAccount.hidden = !on;
+  el.driveUser.textContent = on ? `Conectado como ${drive.accountLabel() || 'tu cuenta de Google'}` : '';
+  el.driveConnect.textContent = on ? 'Volver a revisar Drive' : 'Conectar Google Drive';
+}
+
+el.driveConnect.addEventListener('click', async () => {
+  driveError('');
+  const label = el.driveConnect.textContent;
+  el.driveConnect.disabled = true;
+  try {
+    if (!drive.isConnected()) {
+      el.driveConnect.textContent = 'Conectando…';
+      await drive.connect();
+    }
+    // Registered here rather than on load: nothing is intercepted until
+    // somebody actually asks for Drive.
+    el.driveConnect.textContent = 'Preparando…';
+    await drive.ensureWorker();
+    await scanDrive();
+  } catch (err) {
+    driveError(messageOf(err));
+  } finally {
+    el.driveConnect.disabled = false;
+    el.driveConnect.textContent = label;
+    renderDriveAccount(drive.status());
+  }
+});
+
+/** The scan itself, shared by Connect and by Releer. */
+async function scanDrive() {
+  const typed = el.driveFolder.value.trim();
+  const folderId = typed ? drive.parseFolderId(typed) : null;
+  if (typed && !folderId) {
+    throw new Error('No se reconoce esa carpeta. Pega el enlace de Drive completo, o solo el identificador.');
+  }
+
+  el.counts.textContent = 'Revisando tu Drive…';
+  const entries = await drive.listLibrary({
+    folderId,
+    onProgress: ({ files }) => {
+      if (files) el.counts.textContent = `Revisando tu Drive… ${files} archivos`;
+    },
+  });
+
+  source = 'drive';
+  rootHandle = null;
+  await useEntries(entries, drive.accountLabel() || 'Google Drive');
+  if (!entries.length) {
+    driveError('No se encontró ningún video ni subtítulo en ese Drive.');
+  }
+}
+
+el.driveSignout.addEventListener('click', async () => {
+  await drive.signOut();
+  driveError('');
+  if (source !== 'drive') return;
+
+  // The token is gone, so every entry in the library is now a dead pointer.
+  // Round-tripping through the cache strips the entries and leaves exactly the
+  // shape a remembered library has: the list, the ticks and the resume marks
+  // all stay on screen; only playback is gone.
+  el.video.pause();
+  el.video.removeAttribute('src');
+  el.video.load();
+  current = null;
+  live = false;
+  if (lib) renderLibrary(fromCache(toCache(lib, sourceName)), sourceName);
+  showSetup({
+    title: 'Cerraste la sesión de Drive',
+    body:
+      'La sesión se descartó de esta pestaña. Tu biblioteca, lo que viste y dónde lo dejaste siguen guardados acá; ' +
+      'vuelve a conectar cuando quieras seguir mirando.',
+    action: 'Elegir carpeta',
+    note: PRIVACY,
+    onAction: pickFolder,
+  });
+});
+
+// The video element reports a worker failure as a bare "network error", so the
+// worker sends the real sentence separately and it lands here.
+drive.onMediaError(({ message }) => {
+  if (source === 'drive' && current) showFailure(current, message);
 });
 
 // ---------- library ----------
@@ -375,27 +538,50 @@ async function open(id) {
     // A remembered library with no folder behind it. This is the one moment the
     // fallback browsers are asked for the folder — not on arrival.
     pendingId = id;
-    return askForFolder(`“${ep.label}” está en tu biblioteca, pero la carpeta donde está todavía no se abrió. Elígela y empezará solo.`);
+    return askForFolder(
+      source === 'drive'
+        ? `“${ep.label}” está en tu biblioteca, pero la sesión de Google Drive no está abierta. Conéctala y empezará solo.`
+        : `“${ep.label}” está en tu biblioteca, pero la carpeta donde está todavía no se abrió. Elígela y empezará solo.`
+    );
   }
 
   current = ep;
   el.tree.querySelectorAll('.ep').forEach((n) => n.classList.toggle('active', n.dataset.id === id));
   if (drawerMode()) toggleSidebar(true); // the drawer is covering what you just chose
 
-  let file;
-  try {
-    file = await ep.entry.getFile();
-  } catch (err) {
-    return showFailure(ep, `No se pudo abrir el archivo: ${err.message || err}. Puede que lo hayan movido o renombrado; prueba con Releer.`);
+  const fromDrive = ep.entry.kind === 'drive';
+
+  // Two sources, two ways of handing the video element something to play. A
+  // local file becomes an object URL as before; a Drive file becomes the
+  // worker's virtual path, so the browser makes its own ranged requests and
+  // seeking behaves exactly as it does on a local file. Nothing past this
+  // point knows or cares which one it got.
+  let src;
+  if (fromDrive) {
+    try {
+      await drive.ensureWorker();
+    } catch (err) {
+      return showFailure(ep, messageOf(err));
+    }
+    src = ep.entry.mediaSrc;
+  } else {
+    let file;
+    try {
+      file = await ep.entry.getFile();
+    } catch (err) {
+      return showFailure(ep, `No se pudo abrir el archivo: ${err.message || err}. Puede que lo hayan movido o renombrado; prueba con Releer.`);
+    }
+    src = URL.createObjectURL(file);
   }
 
   showScreen('player');
   el.fail.hidden = true;
   el.npTitle.textContent = ep.label;
+  el.npMode.textContent = fromDrive ? 'google drive' : 'archivo local';
 
   if (objectUrl) URL.revokeObjectURL(objectUrl);
-  objectUrl = URL.createObjectURL(file);
-  el.video.src = objectUrl;
+  objectUrl = fromDrive ? null : src;
+  el.video.src = src;
 
   const saved = getState(ep.id);
   // The tail that counts as "finished" is a share of the episode, capped: 25s
@@ -804,7 +990,20 @@ async function boot() {
   // behind them, and sees them at all if it never is.
   const cache = loadLibraryCache();
   const cached = fromCache(cache);
-  if (cached) renderLibrary(cached, cache.folderName);
+  if (cached) {
+    // A Drive library cannot be re-opened without a click, so remembering
+    // where it came from is what lets the next click be the right one.
+    source = cache.source === 'drive' ? 'drive' : 'folder';
+    sourceName = cache.folderName || '';
+    renderLibrary(cached, cache.folderName);
+  }
+
+  // Never awaited on the way to the first paint: the folder route must not wait
+  // on anything of Drive's, and a failure in here must not take the page down.
+  initDrive().catch((err) => {
+    console.error(err);
+    driveError(messageOf(err));
+  });
 
   if (!supported) return setupUnsupported();
 

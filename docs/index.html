@@ -21,6 +21,11 @@
       </div>
     </header>
     <div id="counts" class="counts"></div>
+    <!-- Only while a Drive session is open: whose Drive this is, and the way out. -->
+    <div id="drive-account" class="drive-account" hidden>
+      <span id="drive-user" class="drive-user"></span>
+      <button id="drive-signout" title="Cerrar la sesión de Google Drive">Cerrar sesión</button>
+    </div>
     <nav id="tree"><p class="empty-list hint">Todavía no hay nada. Elige una carpeta y aparecerán tus episodios.</p></nav>
     <section id="unmatched-wrap" hidden>
       <h2>Fuera de la biblioteca</h2>
@@ -49,6 +54,30 @@
         </div>
         <p id="setup-note" class="hint"></p>
         <p id="setup-error" class="hint bad" hidden></p>
+
+        <!-- The second way in. Separated rather than offered as a peer of the
+             folder button: the folder is the house route, and this is the one
+             for episodes that live in someone's Drive instead of on the disk.
+             Hidden until app.js has read config.js, so the choice never
+             flickers between enabled and disabled. -->
+        <section id="setup-drive" class="setup-alt" hidden>
+          <div class="setup-or"><span>o</span></div>
+          <h3>Reproducir desde Google Drive</h3>
+          <p id="drive-blurb" class="hint">
+            Inicias sesión con tu propia cuenta y Medianoche lee solo tu Drive, sin permiso
+            de escritura. La sesión vive en esta pestaña y desaparece al cerrarla.
+          </p>
+          <div class="drive-actions">
+            <button id="drive-connect">Conectar Google Drive</button>
+          </div>
+          <label class="drive-scope" for="drive-folder">
+            <span>Carpeta de Drive (opcional)</span>
+            <input id="drive-folder" type="text" inputmode="url" autocomplete="off" spellcheck="false"
+                   placeholder="https://drive.google.com/drive/folders/…">
+          </label>
+          <p class="hint drive-hint">Déjalo vacío para revisar todo tu Drive, incluidas las carpetas que otras personas compartieron contigo.</p>
+          <p id="drive-error" class="hint bad" hidden></p>
+        </section>
       </div>
     </section>
 

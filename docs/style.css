@@ -1580,3 +1580,118 @@ button.primary:hover {
   }
   .resume-offer button { min-height: 40px; }
 }
+
+/* ==========================================================================
+   Google Drive — the second way in
+   --------------------------------------------------------------------------
+   A peer of the folder button, not a competitor to it: same surfaces, same
+   hairlines, one accent still reserved for the primary action above. The rule
+   separating them is a rule, not a gradient, and nothing here animates beyond
+   the same 120ms hover every other control uses.
+   ========================================================================== */
+
+.setup-alt {
+  margin-top: var(--s6);
+}
+
+/* A hairline with the word sitting in it — the two routes are alternatives,
+   and the page should say so in one glance rather than in a sentence. */
+.setup-or {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-bottom: var(--s5);
+  color: var(--ink-3);
+  font-size: var(--t-micro);
+  font-weight: 600;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+.setup-or::before,
+.setup-or::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--line);
+}
+
+.setup-alt h3 {
+  margin: 0 0 var(--s2);
+  font-size: var(--t-lg);
+  font-weight: 600;
+  letter-spacing: -.012em;
+  color: var(--ink);
+}
+
+#drive-blurb {
+  margin: 0 0 var(--s4);
+  line-height: 1.65;
+}
+
+.drive-actions { margin-bottom: var(--s4); }
+
+#drive-connect { min-height: 36px; padding: 8px 14px; }
+
+/* The optional scope. Set below the button rather than beside it, because it
+   is the exception — most people want their whole Drive read. */
+.drive-scope {
+  display: block;
+  margin-bottom: var(--s2);
+}
+.drive-scope > span {
+  display: block;
+  margin-bottom: var(--s2);
+  font-size: var(--t-micro);
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+#drive-folder {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--ink);
+  font: 400 var(--t-sm) / 1.4 var(--font);
+}
+#drive-folder::placeholder { color: var(--ink-3); }
+#drive-folder:hover:not(:disabled) { border-color: var(--line-3); }
+#drive-folder:disabled { opacity: .45; }
+
+.drive-hint { margin: 0; line-height: 1.65; }
+#drive-error { margin: var(--s3) 0 0; line-height: 1.65; }
+
+/* No client id in config.js. The option stays on the page and explains itself;
+   dimming the controls is what says it is off, without hiding the reason. */
+.setup-alt.unavailable .drive-scope,
+.setup-alt.unavailable .drive-hint { opacity: .45; }
+
+/* Whose Drive is open, under the counts line where the folder name would be. */
+.drive-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  margin: 0 var(--gutter) var(--s2);
+  padding: 6px 8px 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.drive-user {
+  overflow: hidden;
+  font-size: var(--t-xs);
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#drive-signout { flex: none; }
+
+@media (max-width: 600px) {
+  /* Touch targets, same floor the rest of the phone layout uses. */
+  #drive-connect,
+  #drive-signout { min-height: 40px; }
+  #drive-folder { padding: 10px; font-size: var(--t-md); }
+}
