@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Diagnóstico — Medianoche</title>
+<style>
+ body{background:#0d0d0f;color:#e8e6e3;font:14px/1.6 ui-monospace,Consolas,monospace;margin:0;padding:18px}
+ h1{font:600 16px system-ui;margin:0 0 14px}
+ .ok{color:#7fd18a}.bad{color:#e88b8b}.warn{color:#e0b46a}.dim{color:#8a8a8f}
+ pre{white-space:pre-wrap;word-break:break-word;background:#151517;border:1px solid #262629;border-radius:6px;padding:12px}
+ button{font:600 14px system-ui;background:#2a1f14;color:#e0a45c;border:1px solid #5a4326;border-radius:6px;padding:10px 16px;cursor:pointer}
+</style></head><body>
+<h1>Diagnóstico de la sesión de Google Drive</h1>
+<p class="dim">Abre esto, presiona el botón, y copiá todo lo que aparezca abajo.</p>
+<button id="go">Probar la reconexión silenciosa</button>
+<pre id="out">Presiona el botón.</pre>
+<script type="module">
+const out = document.getElementById('out');
+const lines = [];
+const say = (s, cls) => { lines.push(cls ? `<span class="${cls}">${s}</span>` : s); out.innerHTML = lines.join('\n'); };
+
+document.getElementById('go').addEventListener('click', async () => {
+  lines.length = 0;
+  say('--- almacenamiento ---');
+  const hint = localStorage.getItem('midnight.drive.account');
+  say(`  cuenta recordada : ${hint ? hint : '(VACÍO)'}`, hint ? 'ok' : 'bad');
+  let lib = null;
+  try { lib = JSON.parse(localStorage.getItem('midnight-player.library.v1') || 'null'); } catch {}
+  say(`  biblioteca guardada : ${lib ? 'sí' : 'NO'}`, lib ? 'ok' : 'bad');
+  say(`  origen guardado : ${lib?.source || '(ninguno)'}`, lib?.source === 'drive' ? 'ok' : 'bad');
+  say(`  carpeta guardada : ${lib?.driveFolder || '(vacío)'}`, 'dim');
+  const watch = localStorage.getItem('midnight-player.watch.v1');
+  say(`  historial guardado : ${watch ? Object.keys(JSON.parse(watch)).length + ' episodios' : 'NO'}`, watch ? 'ok' : 'warn');
+
+  say('\n--- config ---');
+  try {
+    const { GOOGLE_CLIENT_ID } = await import('./config.js');
+    say(`  client id : ${GOOGLE_CLIENT_ID ? GOOGLE_CLIENT_ID.slice(0, 20) + '…' : '(VACÍO)'}`, GOOGLE_CLIENT_ID ? 'ok' : 'bad');
+  } catch (e) { say('  config.js FALLÓ: ' + e.message, 'bad'); }
+
+  say('\n--- intento de reconexión silenciosa ---');
+  try {
+    const drive = await import('./lib/drive.js');
+    say('  drive.js cargado', 'ok');
+    say(`  isConnected() antes : ${drive.isConnected()}`, 'dim');
+    try {
+      await drive.refresh({ silent: true });
+      say(`  refresh silencioso : FUNCIONÓ`, 'ok');
+      say(`  isConnected() después : ${drive.isConnected()}`, 'ok');
+      say(`  cuenta : ${drive.accountLabel() || '(sin etiqueta)'}`, 'ok');
+    } catch (e) {
+      say(`  refresh silencioso FALLÓ`, 'bad');
+      say(`  tipo de error : ${e?.code || e?.name || '(sin código)'}`, 'bad');
+      say(`  mensaje : ${e?.message || e}`, 'bad');
+      say('\n  ^^^ ESTA ES LA LÍNEA QUE IMPORTA — copiala', 'warn');
+    }
+  } catch (e) { say('  drive.js FALLÓ: ' + e.message, 'bad'); }
+
+  say('\n--- entorno ---');
+  say(`  contexto seguro : ${window.isSecureContext}`, window.isSecureContext ? 'ok' : 'bad');
+  say(`  service worker : ${'serviceWorker' in navigator ? (navigator.serviceWorker.controller ? 'activo' : 'registrado sin controlar') : 'NO'}`, 'dim');
+  say(`  script de Google : ${window.google?.accounts?.oauth2 ? 'cargado' : 'NO CARGADO'}`, window.google?.accounts?.oauth2 ? 'ok' : 'bad');
+});
+</script></body></html>
