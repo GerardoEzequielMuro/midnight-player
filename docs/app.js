@@ -49,6 +49,7 @@ const el = {
   fail: $('#fail'),
   failTitle: $('#fail-title'),
   failReason: $('#fail-reason'),
+  failAction: $('#fail-action'),
   resume: $('#resume'),
   resumeText: $('#resume-text'),
   resumeRestart: $('#resume-restart'),
@@ -99,6 +100,8 @@ let pendingId = null;  // an episode asked for before the folder was open
 let loadToken = 0;     // guards the async subtitle read against a fast switch
 let source = 'folder'; // 'folder' | 'drive' — which of the two ways in is live
 let sourceName = '';   // the folder's name, or the connected Drive account
+let awaitingReconnect = false; // the failure screen is offering "Reconectar y seguir"
+let failRun = null;    // what the failure screen's button does, when it has one
 
 // ---------- layout ----------
 
@@ -217,6 +220,19 @@ function setupRemembered() {
   });
 }
 
+/**
+ * A returning Drive viewer whose hour ran out. There is nothing to pick: the
+ * library is known and so is the folder, and Google only wants a click.
+ */
+function setupDriveReturn() {
+  showSetup({
+    title: 'Hola de nuevo',
+    body: 'Tu biblioteca de Google Drive está acá, con lo que viste y dónde lo dejaste. Google pide un clic para volver a abrirla.',
+    action: 'Conectar Google Drive',
+    onAction: reconnectDriveLibrary,
+  });
+}
+
 function setupUnsupported() {
   showSetup({
     title: 'Este navegador no puede abrir una carpeta',
@@ -238,9 +254,8 @@ function askForFolder(reason) {
     return showSetup({
       title: 'Vuelve a conectar Drive para reproducirlo',
       body: reason,
-      action: 'Elegir carpeta',
-      note: PRIVACY,
-      onAction: pickFolder,
+      action: 'Conectar Google Drive',
+      onAction: reconnectDriveLibrary,
     });
   }
   showSetup({
@@ -322,8 +337,11 @@ el.btnFolder.addEventListener('click', pickFolder);
 el.rescan.addEventListener('click', async () => {
   el.rescan.textContent = 'Leyendo…';
   try {
-    if (source === 'drive' && drive.isConnected()) await scanDrive();
-    else if (rootHandle) await useHandle(rootHandle);
+    if (source === 'drive') {
+      await ensureDriveSession();
+      await drive.ensureWorker();
+      await scanDrive();
+    } else if (rootHandle) await useHandle(rootHandle);
     else await pickFolder();
   } catch (err) {
     driveError(messageOf(err));
@@ -363,6 +381,7 @@ async function initDrive() {
       'Google Drive necesita que la página se abra por https (o localhost) para poder reproducir video. ' +
       'Así como está abierta ahora, no va a funcionar.';
   }
+  drive.prepare();
 }
 
 function driveError(message) {
@@ -405,30 +424,42 @@ el.driveConnect.addEventListener('click', async () => {
 });
 
 /**
- * Return to a Drive library without signing in again.
+ * A Drive token with at least `minMs` left, renewed if not.
  *
- * The access token is deliberately never stored — anything in localStorage is
- * readable by every script on the page, and a Drive token is worth more than a
- * library listing. What is safe to remember is that this browser connected
- * before, which is not a credential at all.
+ * Call it before any other await in a click handler. Google renews a token only
+ * through a popup, and the browser lets a popup through only while the click
+ * that asked for it is still fresh.
+ */
+async function ensureDriveSession(minMs = 60000) {
+  if (drive.msLeft() > minMs) return;
+  await drive.refresh({ silent: true });
+}
+
+/** The one button after a lapsed session: reconnect, then re-read the remembered folder. */
+async function reconnectDriveLibrary() {
+  try {
+    await ensureDriveSession();
+    await drive.ensureWorker();
+    const cache = loadLibraryCache();
+    if (cache?.driveFolder && !el.driveFolder.value.trim()) el.driveFolder.value = cache.driveFolder;
+    await scanDrive();
+  } catch (err) {
+    setupError(messageOf(err));
+  }
+}
+
+/**
+ * Return to a Drive library without a click, when that is possible at all.
  *
- * That is enough, because Google will re-issue a token without prompting as
- * long as the viewer is still signed in and has not withdrawn consent. So the
- * ordinary case costs no clicks, and the case where it cannot — consent
- * revoked, signed out of Google, an hour of inactivity in a fresh browser —
- * falls back to the button that was always there.
+ * It is possible only while the stored token is inside its hour. Past that,
+ * renewing needs Google's popup, and a popup nobody clicked for is blocked —
+ * the attempt used to be made here anyway, logged an error, and left the
+ * viewer on the folder screen. The caller shows a Connect button instead.
  */
 async function restoreDrive(cache) {
   try {
     if (!(await drive.getClientId())) return false;
-    // A stored session that is still inside its hour needs nothing from Google
-    // at all. Only when there is none is a silent re-grant worth attempting,
-    // and that can fail for reasons outside our control — an expired Google
-    // session, withdrawn consent, a browser blocking it without a gesture.
-    if (!(await drive.resumeStoredSession())) {
-      await drive.refresh({ silent: true });
-    }
-    if (!drive.isConnected()) return false;
+    if (!(await drive.resumeStoredSession())) return false;
     await drive.ensureWorker();
     if (cache?.driveFolder) el.driveFolder.value = cache.driveFolder;
     await scanDrive();
@@ -484,16 +515,22 @@ el.driveSignout.addEventListener('click', async () => {
     body:
       'La sesión se descartó de esta pestaña. Tu biblioteca, lo que viste y dónde lo dejaste siguen guardados acá; ' +
       'vuelve a conectar cuando quieras seguir mirando.',
-    action: 'Elegir carpeta',
-    note: PRIVACY,
-    onAction: pickFolder,
+    action: 'Conectar Google Drive',
+    onAction: reconnectDriveLibrary,
   });
 });
 
 // The video element reports a worker failure as a bare "network error", so the
 // worker sends the real sentence separately and it lands here.
-drive.onMediaError(({ message }) => {
-  if (source === 'drive' && current) showFailure(current, message);
+drive.onMediaError(({ status, message, fileId }) => {
+  if (source !== 'drive' || !current) return;
+  // A request for an episode already left behind is not this one's failure.
+  if (fileId && current.entry?.id && fileId !== current.entry.id) return;
+  if (status === 401) {
+    flush();
+    return askToReconnect(current);
+  }
+  showFailure(current, message);
 });
 
 // ---------- library ----------
@@ -591,6 +628,19 @@ async function open(id) {
   if (drawerMode()) toggleSidebar(true); // the drawer is covering what you just chose
 
   const fromDrive = ep.entry.kind === 'drive';
+  awaitingReconnect = false;
+
+  const saved = getState(ep.id);
+  // The tail that counts as "finished" is a share of the episode, capped: 25s
+  // of credits on a 24-minute episode, but a flat 25s would make a short clip
+  // impossible to resume at all.
+  const tail = saved.duration ? Math.min(25, saved.duration * 0.05) : 0;
+  const resumeAt = saved.position > 20 && saved.position < saved.duration - tail ? saved.position : 0;
+
+  if (fromDrive && !(await driveCoversEpisode(saved, resumeAt))) {
+    el.video.pause();
+    return askToReconnect(ep);
+  }
 
   // Two sources, two ways of handing the video element something to play. A
   // local file becomes an object URL as before; a Drive file becomes the
@@ -624,12 +674,6 @@ async function open(id) {
   objectUrl = fromDrive ? null : src;
   el.video.src = src;
 
-  const saved = getState(ep.id);
-  // The tail that counts as "finished" is a share of the episode, capped: 25s
-  // of credits on a 24-minute episode, but a flat 25s would make a short clip
-  // impossible to resume at all.
-  const tail = saved.duration ? Math.min(25, saved.duration * 0.05) : 0;
-  const resumeAt = saved.position > 20 && saved.position < saved.duration - tail ? saved.position : 0;
   if (resumeAt) {
     el.video.addEventListener('loadedmetadata', () => { el.video.currentTime = resumeAt; }, { once: true });
   }
@@ -638,11 +682,70 @@ async function open(id) {
   buildTrackList(ep, saved);
 }
 
-function showFailure(ep, reason) {
+function showFailure(ep, reason, action = null) {
   showScreen('player');
   el.fail.hidden = false;
   el.failTitle.textContent = ep.label;
   el.failReason.textContent = reason;
+  el.failAction.hidden = !action;
+  el.failAction.textContent = action?.label || '';
+  failRun = action?.run || null;
+}
+
+el.failAction.addEventListener('click', () => failRun?.());
+
+const EPISODE_GUESS_S = 30 * 60;
+
+/**
+ * Make sure the Drive token outlasts the episode about to play.
+ *
+ * Renewing takes a popup, and a popup takes a click: opening an episode from
+ * the list is one, the automatic next episode at the end of the last one is
+ * not. So renew when a click allows it, and report false only when there is no
+ * usable token at all. A token that is merely short still plays what it can,
+ * and the reconnect button catches the rest.
+ */
+async function driveCoversEpisode(saved, resumeAt) {
+  const remaining = saved.duration ? saved.duration - resumeAt : EPISODE_GUESS_S;
+  if (drive.msLeft() > (remaining + 300) * 1000) return true;
+  const clicked = !navigator.userActivation || navigator.userActivation.isActive;
+  if (clicked) {
+    try {
+      await drive.refresh({ silent: true });
+    } catch {
+      // Refused or blocked: whatever is left of the old token still counts.
+    }
+  }
+  return drive.isConnected();
+}
+
+/**
+ * The Drive hour ran out. The button's click is what lets Google's popup
+ * through; after that the episode opens again at its saved position.
+ */
+function askToReconnect(ep) {
+  awaitingReconnect = true;
+  showFailure(ep, 'La sesión de Google Drive venció (dura una hora). Reconecta y sigue donde quedó.', {
+    label: 'Reconectar y seguir',
+    run: async () => {
+      el.failAction.disabled = true;
+      try {
+        // Always a fresh token, even if the clock says the old one has time
+        // left: Drive just refused it, and trusting the clock would loop.
+        await drive.refresh({ silent: true });
+        await drive.ensureWorker();
+        if (ep.entry) return await open(ep.id);
+        // A remembered library has no entries until it is scanned again, and
+        // useEntries opens the pending episode once they are back.
+        pendingId = ep.id;
+        await scanDrive();
+      } catch (err) {
+        el.failReason.textContent = messageOf(err);
+      } finally {
+        el.failAction.disabled = false;
+      }
+    },
+  });
 }
 
 /**
@@ -791,7 +894,9 @@ el.video.addEventListener('timeupdate', () => {
 });
 
 el.video.addEventListener('error', () => {
-  if (!current) return;
+  // The worker's 401 already put up the reconnect button; a bare "network
+  // error" arriving after it must not replace that with a dead end.
+  if (!current || awaitingReconnect) return;
   const codes = {
     1: 'the load was aborted',
     2: 'the file could not be read',
@@ -1065,6 +1170,10 @@ async function boot() {
   if (cache?.source === 'drive') {
     await driveReady;
     if (await restoreDrive(cache)) return;
+    // The hour ran out since the last visit. This used to fall through to the
+    // folder route, which offers a folder picker to someone whose episodes are
+    // not on this computer at all.
+    if (await drive.getClientId()) return setupDriveReturn();
   }
 
   if (hasDirectoryPicker) {

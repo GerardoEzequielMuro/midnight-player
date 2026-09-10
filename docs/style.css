@@ -476,6 +476,7 @@ kbd {
   background: var(--void);
 }
 .prep-inner { width: min(440px, 82%); }
+#fail-action { margin-top: var(--s4); }
 
 #prep-title {
   margin: 0;

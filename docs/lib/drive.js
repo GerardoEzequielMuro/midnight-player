@@ -157,7 +157,6 @@ let token = null;
 let tokenExpiresAt = 0;
 let account = null;      // { name, email } once Drive has told us who this is
 let tokenClient = null;
-let refreshTimer = 0;
 let refreshing = null;
 
 const watchers = new Set();
@@ -174,11 +173,17 @@ function announce() {
   }
 }
 
+/** A token past its hour is not a connection, however recently it was one. */
+const live = () => !!token && Date.now() < tokenExpiresAt;
+
 export function status() {
-  return { connected: !!token, account, expiresAt: tokenExpiresAt };
+  return { connected: live(), account, expiresAt: tokenExpiresAt };
 }
 
-export const isConnected = () => !!token;
+export const isConnected = live;
+
+/** How long the current token has left, in milliseconds; 0 when there is none. */
+export const msLeft = () => (token ? Math.max(0, tokenExpiresAt - Date.now()) : 0);
 
 /** What "Conectado como …" shows: the address if Drive gave one, else the name. */
 export function accountLabel() {
@@ -225,6 +230,19 @@ async function ensureTokenClient() {
   return tokenClient;
 }
 
+/**
+ * Load Google's library before anyone clicks. A popup only counts as opened by
+ * a click for a few seconds, and fetching the script inside that window can use
+ * them up.
+ */
+export async function prepare() {
+  try {
+    await ensureTokenClient();
+  } catch {
+    // The click that needs it will report why.
+  }
+}
+
 const GIS_MESSAGES = {
   popup_closed: 'Cerraste la ventana de Google antes de terminar de iniciar sesión.',
   popup_failed_to_open: 'El navegador bloqueó la ventana de Google. Permite las ventanas emergentes de este sitio y vuelve a intentarlo.',
@@ -268,15 +286,12 @@ function keepToken(resp) {
   const seconds = Number(resp.expires_in) || 3600;
   tokenExpiresAt = Date.now() + seconds * 1000;
 
-  // Tokens last about an hour. Renewing a few minutes early keeps a long
-  // episode from stalling halfway, and the renewal is silent because the grant
-  // is already there.
-  clearTimeout(refreshTimer);
-  refreshTimer = setTimeout(
-    () => { refresh({ silent: true }).catch(() => {}); },
-    Math.max(30, seconds - 300) * 1000
-  );
-
+  // No renewal timer. Google renews a token only through a popup, and a popup
+  // opened by a timer is blocked by the browser, so the timer never renewed
+  // anything: it logged an error and let the token lapse mid-episode. Renewal
+  // happens inside a click instead — app.js asks for it when an episode is
+  // opened with too little of the hour left, and offers a button when the hour
+  // runs out anyway.
   saveSession();
   pushToken();
   announce();
@@ -301,7 +316,6 @@ export async function connect() {
   return status();
 }
 
-/** A quieter renewal, used by the expiry timer and by a 401 from Drive. */
 /**
  * Pick a stored session back up, if there is a live one.
  *
@@ -320,18 +334,15 @@ export async function resumeStoredSession() {
   tokenExpiresAt = s.expiresAt;
   account = s.account || null;
 
-  // Renew a few minutes before it lapses, so a long episode does not stall
-  // halfway through.
-  const secondsLeft = Math.max(30, Math.floor((tokenExpiresAt - Date.now()) / 1000) - 300);
-  clearTimeout(refreshTimer);
-  refreshTimer = setTimeout(() => { refresh({ silent: true }).catch(() => {}); }, secondsLeft * 1000);
-
   await pushToken();
   announce();
   return true;
 }
 
-
+/**
+ * Renewal without the consent screen. It opens a popup that closes itself, so
+ * it only works while a click is in progress — see keepToken.
+ */
 export async function refresh({ silent = true } = {}) {
   if (refreshing) return refreshing;
   refreshing = (async () => {
@@ -371,7 +382,6 @@ async function loadAccount() {
 
 /** Drop the token, here and in the worker. Nothing was stored, so nothing is deleted. */
 export async function signOut() {
-  clearTimeout(refreshTimer);
   token = null;
   tokenExpiresAt = 0;
   account = null;
@@ -704,12 +714,10 @@ function wireWorkerMessages() {
   navigator.serviceWorker.addEventListener('message', async (event) => {
     const data = event.data;
     if (data?.type !== 'drive-token-request') return;
-    // 'stale' means the worker's copy was rejected, so handing back the same
-    // one is no use — renew before answering.
-    if (data.reason === 'stale' && token) {
-      try { await refresh({ silent: true }); } catch { /* answer with what we have */ }
-    }
-    postToWorker({ type: 'drive-token', token });
+    // No renewal from here: nothing was clicked, so the popup would be blocked.
+    // A lapsed token is answered with nothing, which the worker turns into a
+    // 401 that the page offers a reconnect button for.
+    postToWorker({ type: 'drive-token', token: live() ? token : null });
   });
 }
 
